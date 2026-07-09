@@ -1,3 +1,9 @@
+---
+name: git-workflow
+description: Fluxo seguro de git para revisar status e diffs, escrever mensagens de commit e sugerir sequências de comandos. Use quando o usuário pedir ajuda com git, commits, branches, PRs, changelog ou análise de diff.
+compatibility: Termux/Android, Linux, repositórios Git.
+---
+
 # Git Workflow
 
 Use esta skill quando o usuário pedir ajuda com git, commits, branches, PRs, changelog ou análise de diff.

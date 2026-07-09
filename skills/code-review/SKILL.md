@@ -1,3 +1,9 @@
+---
+name: code-review
+description: Revisão de código focada em problemas reais, classificados por severidade, com sugestões pequenas e testáveis. Use quando o usuário pedir revisão, auditoria, refatoração segura ou análise de qualidade.
+compatibility: Termux/Android, Linux, projetos de código.
+---
+
 # Code Review
 
 Use esta skill quando o usuário pedir revisão, auditoria, refatoração segura ou análise de qualidade.

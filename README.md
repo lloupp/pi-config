@@ -7,9 +7,12 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 - `AGENTS.md` — instruções globais do agente
 - `settings.json` — preferências (tema, modelo padrão)
 - `prompts/` — templates reutilizáveis (`review`, `debug`, `commit-msg`, `termux-setup`)
-- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `learn-repository`
+- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`
 - `extensions/` — extensões TypeScript personalizadas:
   - `persistent-memory` — memória persistente entre sessões
+  - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões
+  - `web-tools` — ferramentas `web_search` e `web_fetch` para navegar na internet
+  - `checkpoint` — snapshot automático antes de cada edição do agente; `/undo` e `/checkpoints` para reverter
   - `plan-tasks` — modo plano e gestão de tarefas
   - `safety-guard` — proteção contra comandos perigosos
   - `termux-tools` — comandos e ferramentas para Termux
@@ -20,8 +23,20 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 ## Como instalar
 
 ```bash
-# Clone ou copie este diretório
-bash install-pi-config.sh
+# Clone ou copie este diretório para ~/pi-config, então:
+bash install-pi-config.sh              # instala globalmente em ~/.pi/agent
+bash install-pi-config.sh --project    # instala no projeto atual (.pi/agent)
+```
+
+Somente os itens de configuração (`AGENTS.md`, `settings.json`, `prompts/`, `skills/`,
+`extensions/`, `themes/`) são copiados. Depois, reinicie o Pi ou use `/reload-pi`.
+
+## Como atualizar este backup a partir do ambiente atual
+
+```bash
+cp -r ~/.pi/agent/AGENTS.md ~/.pi/agent/settings.json \
+      ~/.pi/agent/prompts ~/.pi/agent/skills \
+      ~/.pi/agent/extensions ~/.pi/agent/themes ~/pi-config/
 ```
 
 ## Como contribuir com suas próprias modificações
@@ -30,5 +45,5 @@ bash install-pi-config.sh
 cd ~/pi-config
 git add .
 git commit -m "Sua modificação"
-git push origin main
+git push origin master
 ```

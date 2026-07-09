@@ -1,6 +1,6 @@
 ---
 name: debug-loop
-description: Loop sistemático de depuração: reproduzir, observar, formular hipótese, testar, corrigir e prevenir regressão. Use para bugs, erros de build, testes falhando e comportamento inesperado.
+description: "Loop sistemático de depuração: reproduzir, observar, formular hipótese, testar, corrigir e prevenir regressão. Use para bugs, erros de build, testes falhando e comportamento inesperado."
 compatibility: Termux/Android, Linux, projetos Node/Python/Git.
 ---
 

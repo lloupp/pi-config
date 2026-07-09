@@ -1,3 +1,9 @@
+---
+name: termux-dev
+description: Diretrizes para desenvolvimento em Termux/Android, sem sudo nem systemd, usando pkg e caminhos do Termux. Use quando o usuário pedir ajuda com Termux, Android, instalação de pacotes, shell ou ambiente de desenvolvimento no celular.
+compatibility: Termux/Android.
+---
+
 # Termux Dev
 
 Use esta skill quando o usuário pedir ajuda com Termux, Android, instalação de pacotes, shell, ambiente de desenvolvimento ou comandos Linux no celular.

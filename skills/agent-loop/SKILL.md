@@ -1,6 +1,6 @@
 ---
 name: agent-loop
-description: Fluxo iterativo para tarefas de desenvolvimento: entender, planejar, implementar, testar, corrigir e resumir. Use quando a tarefa exigir múltiplos passos ou validação contínua.
+description: "Fluxo iterativo para tarefas de desenvolvimento: entender, planejar, implementar, testar, corrigir e resumir. Use quando a tarefa exigir múltiplos passos ou validação contínua."
 compatibility: Termux/Android, Linux, projetos de código.
 ---
 
