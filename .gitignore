@@ -1,0 +1,25 @@
+# Pi agent configuration
+# Exclude runtime data
+
+# Memory database (binary/derived)
+memory/
+
+# Session data
+sessions/
+
+# Authentication tokens
+auth.json
+
+# Node modules (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
