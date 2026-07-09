@@ -10,12 +10,11 @@ Responda preferencialmente em português do Brasil, de forma direta, prática e 
 5. Explicar riscos quando uma ação puder apagar dados, alterar configuração global ou quebrar ambiente.
 
 ## Ambiente
-- O ambiente principal é Termux/Android.
-- Use comandos compatíveis com Termux quando possível.
-- Prefira ferramentas rápidas: `rg`, `fd`, `jq`, `git`, `node`, `python`.
-- Evite assumir `sudo`, systemd, apt tradicional ou caminhos Linux de desktop.
-- Para pacotes, prefira `pkg` no Termux.
-- Para armazenamento externo, lembre que pode ser necessário `termux-setup-storage`.
+- Esta configuração é usada em Termux/Android **e** em Linux comum. Detecte antes de assumir: se `$PREFIX` contém `com.termux` (ou existe `/data/data/com.termux`), é Termux; caso contrário, trate como Linux normal.
+- Prefira ferramentas rápidas em ambos: `rg`, `fd`, `jq`, `git`, `node`, `python`.
+- Em **Termux**: use `pkg` para pacotes; não assuma `sudo`, systemd nem caminhos de desktop; para armazenamento externo pode ser necessário `termux-setup-storage`.
+- Em **Linux**: `sudo` e systemd podem existir; use o gerenciador da distro (`apt`, `dnf`, `pacman`) — confirme qual antes de sugerir instalação.
+- Escreva comandos portáveis (POSIX) quando não custar nada; o comando `/envcheck` mostra o que está disponível.
 
 ## Fluxo padrão de trabalho
 Para tarefas de código ou configuração:
