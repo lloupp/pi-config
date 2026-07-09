@@ -55,6 +55,7 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `code-review`: revisão, auditoria, segurança, qualidade.
 - `termux-dev`: Termux, Android, shell, pacotes e ambiente.
 - `git-workflow`: commits, branches, diffs, PRs e changelog.
+- `loop-engineering`: refinamento iterativo com sinal de verificação.
 - `learn-repository`: aprender estrutura, comandos e convenções de um repositório e salvar memória persistente.
 
 ## Segurança
