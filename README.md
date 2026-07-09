@@ -13,6 +13,8 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões
   - `web-tools` — ferramentas `web_search` e `web_fetch` para navegar na internet
   - `checkpoint` — snapshot automático antes de cada edição do agente; `/undo` e `/checkpoints` para reverter
+  - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json); erro volta direto para o agente corrigir; `/autocheck on|off`
+  - `subagent` — ferramenta `subagent`: delega tarefas a um `pi -p` com contexto isolado (modo explore somente leitura ou full)
   - `plan-tasks` — modo plano e gestão de tarefas
   - `safety-guard` — proteção contra comandos perigosos
   - `termux-tools` — comandos e ferramentas para Termux

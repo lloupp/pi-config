@@ -7,13 +7,20 @@ function basename(path: string) {
 export default function (pi: ExtensionAPI) {
   let turn = 0;
 
+  function contextBadge(ctx: any): string {
+    const usage = ctx.getContextUsage?.();
+    if (!usage || usage.percent == null) return "";
+    const pct = Math.round(usage.percent);
+    return ` · ctx ${pct}%${pct >= 80 ? " ⚠" : ""}`;
+  }
+
   function updateStatus(ctx: any, extra = "") {
     if (!ctx.hasUI) return;
 
     const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "modelo?";
     const thinking = pi.getThinkingLevel();
     const cwd = basename(ctx.cwd);
-    const text = `${cwd} · ${thinking} · ${model}${extra}`;
+    const text = `${cwd} · ${thinking} · ${model}${contextBadge(ctx)}${extra}`;
     ctx.ui.setStatus("pi-plus", ctx.ui.theme.fg("dim", text));
   }
 
@@ -41,6 +48,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_end", async (_event, ctx) => updateStatus(ctx, ` · ✓ ${turn}`));
+  pi.on("agent_end", async (_event, ctx) => updateStatus(ctx));
 
   pi.registerCommand("status-pi", {
     description: "Mostra informações rápidas da sessão atual",

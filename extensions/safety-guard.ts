@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 const destructiveBashPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\brm\s+(?:-[^\n;|&]*[rf][^\n;|&]*|--recursive|--force)/i, label: "remoção recursiva/forçada" },
@@ -29,8 +30,8 @@ async function confirmOrBlock(ctx: any, title: string, body: string) {
 
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
-    if (event.toolName === "bash") {
-      const command = String((event.input as any).command ?? "");
+    if (isToolCallEventType("bash", event)) {
+      const command = event.input.command;
       const match = destructiveBashPatterns.find(({ pattern }) => pattern.test(command));
       if (!match) return undefined;
 
@@ -41,8 +42,8 @@ export default function (pi: ExtensionAPI) {
       );
     }
 
-    if (event.toolName === "write" || event.toolName === "edit") {
-      const path = String((event.input as any).path ?? "");
+    if (isToolCallEventType("write", event) || isToolCallEventType("edit", event)) {
+      const path = event.input.path;
       const match = protectedPathPatterns.find(({ pattern }) => pattern.test(path));
       if (!match) return undefined;
 

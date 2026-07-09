@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, unlink, mkdir } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
@@ -39,8 +40,8 @@ export default function (pi: ExtensionAPI) {
   let nextId = 1;
 
   pi.on("tool_call", async (event, ctx) => {
-    if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
-    const rawPath = String((event.input as any).path ?? "");
+    if (!isToolCallEventType("write", event) && !isToolCallEventType("edit", event)) return undefined;
+    const rawPath = event.input.path;
     if (!rawPath) return undefined;
     const absPath = isAbsolute(rawPath) ? rawPath : join(ctx.cwd, rawPath);
 

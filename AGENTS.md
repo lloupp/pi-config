@@ -60,6 +60,8 @@ Após aprovação do usuário, use `/implement` ou implemente o plano em passos 
 - Use `persistent_memory` para guardar preferências, decisões e aprendizados estáveis entre sessões; nunca salve segredos.
 - Use `error_lessons` para registrar lições quando algo falhar (comando, hipótese, abordagem) e consulte-as antes de repetir uma tentativa que já deu errado.
 - Use `web_search` e `web_fetch` quando precisar de informação externa ao projeto (documentação, erros, versões). Cite as URLs usadas.
+- Use `subagent` (mode=explore) para buscas amplas no código cuja resposta é curta — a leitura pesada fica no contexto do subagente, não no seu. A tarefa deve ser autocontida: o subagente não vê esta conversa.
+- Edições em `.js`, `.py`, `.sh` e `.json` passam por verificação automática de sintaxe (auto-check); se o resultado da edição trouxer um erro `[auto-check]`, corrija imediatamente antes de prosseguir.
 - Antes de editar arquivos existentes, leia o arquivo relevante.
 - Prefira `read` para examinar arquivos em vez de `cat`/`sed`, quando estiver usando ferramentas do Pi.
 - Use `edit` para mudanças pontuais e `write` somente para arquivos novos ou reescritas completas justificadas.
