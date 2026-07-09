@@ -4,25 +4,41 @@
 
 set -euo pipefail
 
-MODE="${1:-global}"
+MODE="${1:---global}"
 SRC_DIR="${2:-$HOME/pi-config}"
 
-if [[ "$MODE" == "--project" ]]; then
-  DEST_DIR=".pi/agent"
-  CMD="mkdir -p .pi/agent && cp -r \"$SRC_DIR\"/* \"$DEST_DIR/\" && echo 'Config installed to .pi/agent/'"
-else
-  DEST_DIR="$HOME/.pi/agent"
-  CMD="mkdir -p \"\$HOME/.pi/agent\" && cp -r \"$SRC_DIR\"/* \"\$HOME/.pi/agent/\" && echo 'Config installed to ~/.pi/agent/'"
-fi
+# Only config items are installed; repo-only files (README, .git, this script) stay out.
+ITEMS=(AGENTS.md settings.json prompts skills extensions themes)
 
-# Safety: warn if source does not exist
+case "$MODE" in
+  --project|project)
+    DEST_DIR=".pi/agent"
+    ;;
+  --global|global)
+    DEST_DIR="$HOME/.pi/agent"
+    ;;
+  *)
+    echo "Uso: bash install-pi-config.sh [--global|--project] [source_dir]" >&2
+    exit 1
+    ;;
+esac
+
 if [[ ! -d "$SRC_DIR" ]]; then
-  echo "Warning: Source directory $SRC_DIR not found."
-  echo "Expected to find pi-config backup there."
+  echo "Erro: diretório de origem $SRC_DIR não encontrado." >&2
+  echo "Esperava encontrar o backup do pi-config lá." >&2
   exit 1
 fi
 
-echo "Installing Pi config from $SRC_DIR to $DEST_DIR"
-eval "$CMD"
+echo "Instalando Pi config de $SRC_DIR em $DEST_DIR"
+mkdir -p "$DEST_DIR"
 
-echo "Done. Restart or reload Pi to apply."
+for item in "${ITEMS[@]}"; do
+  if [[ -e "$SRC_DIR/$item" ]]; then
+    cp -r "$SRC_DIR/$item" "$DEST_DIR/"
+    echo "  ✓ $item"
+  else
+    echo "  - $item não encontrado em $SRC_DIR; pulando." >&2
+  fi
+done
+
+echo "Pronto. Reinicie o Pi ou use /reload-pi para aplicar."
