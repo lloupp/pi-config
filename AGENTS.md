@@ -51,12 +51,12 @@ Após aprovação do usuário, use `/implement` ou implemente o plano em passos 
 
 ## Skills recomendadas
 Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
-- `agent-loop`: tarefas longas, implementação iterativa, validação contínua.
-- `debug-loop`: bugs, erros de build, testes falhando, stack traces.
+- `agent-loop`: **construir algo novo** (feature, script, config) em passos com validação contínua.
+- `debug-loop`: **consertar algo quebrado** — bugs, erros de build, testes falhando, stack traces.
 - `code-review`: revisão, auditoria, segurança, qualidade.
 - `termux-dev`: Termux, Android, shell, pacotes e ambiente.
 - `git-workflow`: commits, branches, diffs, PRs e changelog.
-- `loop-engineering`: refinamento iterativo com sinal de verificação.
+- `loop-engineering`: **otimizar algo que já funciona** contra um sinal medível (desempenho, cobertura, qualidade).
 - `learn-repository`: aprender estrutura, comandos e convenções de um repositório e salvar memória persistente.
 - `self-debate`: decisões com trade-offs (arquitetura, bibliotecas, refatorar vs corrigir); debater posições opostas antes de decidir.
 - `web-research`: pesquisar na internet com método — buscar, verificar fontes, citar URLs.
