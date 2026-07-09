@@ -7,7 +7,7 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 - `AGENTS.md` — instruções globais do agente
 - `settings.json` — preferências (tema, modelo padrão)
 - `prompts/` — templates reutilizáveis (`review`, `debug`, `commit-msg`, `termux-setup`)
-- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`
+- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`, `verify`
 - `extensions/` — extensões TypeScript personalizadas:
   - `persistent-memory` — memória persistente entre sessões
   - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões

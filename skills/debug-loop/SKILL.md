@@ -15,6 +15,9 @@ compatibility: Termux/Android, Linux, projetos Node/Python/Git.
 2. **Observar**
    - Leia stack trace e arquivos citados.
    - Verifique versões de runtime quando útil (`node --version`, `python --version`).
+   - Consulte `error_lessons` (search) com um termo do erro — pode já ter sido resolvido antes.
+   - Se a mensagem de erro for desconhecida, use `web_search` com a parte genérica dela
+     (sem caminhos ou nomes locais) — bugs conhecidos de biblioteca quase sempre têm registro.
 
 3. **Hipótese**
    - Declare a causa mais provável.
@@ -34,10 +37,13 @@ compatibility: Termux/Android, Linux, projetos Node/Python/Git.
 
 7. **Prevenção**
    - Sugira teste, assertion ou checagem para evitar regressão.
+   - Se a causa não era óbvia, registre em `error_lessons` (scope repo): o que falhou,
+     a causa raiz e como evitar — é o que impede repetir o mesmo debug em outra sessão.
 
 ## Saída esperada
 
 - Causa raiz
 - Arquivos alterados
 - Validação executada
+- Lição registrada (quando a causa não era óbvia)
 - Próxima ação se ainda falhar

@@ -35,6 +35,13 @@ Se encontrar segredo, avise o risco sem repetir o valor.
 
 ## Fluxo recomendado
 
+0. **Revisar memórias existentes** (se o repo já foi aprendido antes)
+   - Consulte `persistent_memory` (search, scope repo) antes de re-aprender do zero.
+   - Memória envelhece: **verifique contra a realidade** as que afetam o trabalho —
+     o comando de teste ainda existe no `package.json`? o diretório citado ainda existe?
+   - Memória obsoleta é pior que nenhuma (será injetada como verdade): use `forget`
+     na errada e salve a versão corrigida.
+
 1. **Snapshot inicial**
    - Use `project_snapshot`.
    - Verifique se é repo Git com `git status --short` quando aplicável.
