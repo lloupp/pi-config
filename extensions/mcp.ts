@@ -159,14 +159,16 @@ class McpClient {
 
   stop(): void {
     this.connected = false;
-    if (this.child && this.child.exitCode === null && !this.child.killed) {
-      this.child.kill("SIGTERM");
-      const child = this.child;
+    const child = this.child;
+    this.child = undefined;
+    // child.killed vira true assim que kill() é chamado (não quando o processo morre),
+    // então a escalação decide só por exitCode.
+    if (child && child.exitCode === null) {
+      child.kill("SIGTERM");
       setTimeout(() => {
-        if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
+        if (child.exitCode === null) child.kill("SIGKILL");
       }, 3000).unref?.();
     }
-    this.child = undefined;
   }
 
   lastStderr(): string {
@@ -220,11 +222,23 @@ class McpClient {
   ): Promise<any> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
+      const cleanup = () => signal?.removeEventListener("abort", onAbort);
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        cleanup();
         reject(new Error(`MCP '${this.name}': timeout de ${timeoutMs}ms em ${method}`));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, {
+        resolve: (value) => {
+          cleanup();
+          resolve(value);
+        },
+        reject: (err) => {
+          cleanup();
+          reject(err);
+        },
+        timer,
+      });
       const onAbort = () => {
         const pending = this.pending.get(id);
         if (!pending) return;
@@ -319,23 +333,26 @@ export default function mcpExtension(pi: ExtensionAPI) {
         description: `[MCP ${serverName}] ${tool.description ?? mcpToolName}`,
         parameters: schema as any,
         async execute(_toolCallId, params, signal) {
+          const details = { server: serverName, tool: mcpToolName };
           const current = clients.get(serverName);
           if (!current) {
             return {
               content: [{ type: "text", text: `Servidor MCP '${serverName}' não está ativo. Use /mcp start.` }],
               isError: true,
+              details,
             };
           }
           try {
             const result = await current.callTool(mcpToolName, (params ?? {}) as Record<string, unknown>, signal);
             const { content, isError } = convertContent(result);
-            return { content, isError, details: { server: serverName, tool: mcpToolName } };
+            return { content, isError, details };
           } catch (err) {
             const stderr = current.lastStderr();
             const extra = stderr ? `\nstderr recente do servidor:\n${truncate(stderr, 2000)}` : "";
             return {
               content: [{ type: "text", text: `${(err as Error).message}${extra}` }],
               isError: true,
+              details,
             };
           }
         },
@@ -375,7 +392,11 @@ export default function mcpExtension(pi: ExtensionAPI) {
 
     for (const name of names) {
       if (only && !configured.includes(name)) {
-        summary.push(`✗ ${name}: não encontrado em mcp.json`);
+        summary.push(
+          configs[name]
+            ? `✗ ${name}: desativado (enabled: false) em mcp.json`
+            : `✗ ${name}: não encontrado em mcp.json`,
+        );
         continue;
       }
       if (clients.get(name)?.connected) {
@@ -433,7 +454,7 @@ export default function mcpExtension(pi: ExtensionAPI) {
       const only = target ? [target] : undefined;
 
       if (cmd === "start" || cmd === "on") {
-        const summary = await connectServers(process.cwd(), only);
+        const summary = await connectServers(ctx.cwd, only);
         ctx.ui.notify(`MCP start: ${summary.join(" · ")}`, "info");
         return;
       }
@@ -450,13 +471,13 @@ export default function mcpExtension(pi: ExtensionAPI) {
 
       if (cmd === "reload") {
         stopServers(only);
-        const summary = await connectServers(process.cwd(), only);
+        const summary = await connectServers(ctx.cwd, only);
         ctx.ui.notify(`MCP reload: ${summary.join(" · ")}`, "info");
         return;
       }
 
       if (clients.size === 0) {
-        const configs = loadConfigs(process.cwd());
+        const configs = loadConfigs(ctx.cwd);
         const known = Object.keys(configs);
         const hint = known.length > 0 ? ` Configurados: ${known.join(", ")}.` : "";
         ctx.ui.notify(
