@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--browser=chrome"],
+      "enabled": true,
+      "timeoutMs": 120000
+    }
+  }
+}

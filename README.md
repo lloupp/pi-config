@@ -6,6 +6,7 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 
 - `AGENTS.md` — instruções globais do agente
 - `settings.json` — preferências (tema, modelo padrão)
+- `mcp.json` — servidores MCP (formato igual ao do Claude Desktop/Code); vem com o `@playwright/mcp` (automação do Chrome) pré-configurado
 - `prompts/` — templates reutilizáveis (`review`, `debug`, `commit-msg`, `termux-setup`)
 - `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`, `verify`
 - `extensions/` — extensões TypeScript personalizadas:
@@ -15,6 +16,7 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `checkpoint` — snapshot automático antes de cada edição do agente; `/undo` e `/checkpoints` para reverter
   - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json); erro volta direto para o agente corrigir; `/autocheck on|off`
   - `subagent` — ferramenta `subagent`: delega tarefas a um `pi -p` com contexto isolado (modo explore somente leitura ou full)
+  - `mcp` — cliente MCP (Model Context Protocol) via stdio, sem dependências; lê `mcp.json` e registra cada tool do servidor como `mcp_<servidor>_<tool>`; `/mcp` mostra status, `/mcp reload` reconecta
   - `plan-tasks` — modo plano e gestão de tarefas
   - `safety-guard` — proteção contra comandos perigosos
   - `termux-tools` — comandos e ferramentas para Termux

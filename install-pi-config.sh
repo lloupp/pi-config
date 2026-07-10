@@ -8,7 +8,7 @@ MODE="${1:---global}"
 SRC_DIR="${2:-$HOME/pi-config}"
 
 # Only config items are installed; repo-only files (README, .git, this script) stay out.
-ITEMS=(AGENTS.md settings.json prompts skills extensions themes)
+ITEMS=(AGENTS.md settings.json mcp.json prompts skills extensions themes)
 
 case "$MODE" in
   --project|project)
