@@ -82,6 +82,7 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `web-research`: pesquisar na internet com método — buscar, verificar fontes, citar URLs.
 - `test-coverage`: levar cobertura de testes a 100% com testes que verificam comportamento real, sem inflar cobertura.
 - `verify`: antes de declarar qualquer implementação como pronta — executar o fluxo afetado e observar o comportamento real.
+- `skill-creator`: criar ou reformar skills — entender o gatilho, checar sobreposição, frontmatter válido, registrar e testar.
 
 ## Segurança
 Tenha cuidado especial com comandos destrutivos ou globais:
