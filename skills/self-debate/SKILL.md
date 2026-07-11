@@ -1,6 +1,6 @@
 ---
 name: self-debate
-description: "Debate interno estruturado para decisões com trade-offs: o agente defende posições opostas, ataca os próprios argumentos e só então decide. Use para escolhas de arquitetura, biblioteca, abordagem de refatoração ou qualquer decisão em que a primeira resposta pode estar errada."
+description: "Debate estruturado para decisões com trade-offs: o agente defende posições opostas, ataca os próprios argumentos e só então decide; para decisões importantes, cada posição pode ser um modelo free diferente via subagent. Use para escolhas de arquitetura, biblioteca, abordagem de refatoração ou qualquer decisão em que a primeira resposta pode estar errada. Roteamento: decidir entre opções = self-debate; planejar/desempacar/revisar com modelo maior = orchestrator."
 compatibility: Termux/Android, Linux, qualquer projeto.
 ---
 
@@ -36,6 +36,22 @@ Regras do debate:
 - cada posição cita evidência concreta (arquivo, comando, fato verificado), não só opinião;
 - o Cético é obrigado a achar pelo menos um problema real na opção favorita;
 - proibido concluir antes de todas as posições falarem.
+
+### 2b. Debate multi-modelo (opcional, decisões importantes)
+
+Para decisões difíceis de reverter (arquitetura, formato de dados, API pública) e com rede disponível, escale o debate: cada posição vira um modelo free diferente via tool `subagent` (`provider="openrouter"`), para opiniões genuinamente independentes:
+
+- **Advogado** → `model="qwen/qwen3-coder:free"` (ou `nvidia/nemotron-3-super-120b-a12b:free`)
+- **Cético** → `model="openai/gpt-oss-120b:free"` (ou `qwen/qwen3-next-80b-a3b-instruct:free`)
+- **Pragmático** → você mesmo, o agente principal — é quem conhece o ambiente real.
+
+<!-- IDs confirmados na API pública do OpenRouter (2026-07-11). -->
+
+Regras:
+- prompt autocontido por posição: a decisão em uma frase, os critérios do passo 1, os fatos coletados e o papel a assumir ("defenda X com o melhor caso" / "ataque X, aponte riscos");
+- nunca inclua segredos no prompt;
+- o debate interno continua sendo o **padrão** — multi-modelo só quando a decisão justificar o custo;
+- se um modelo falhar (rate limit do tier free), caia para o debate interno na posição faltante — não trave a decisão.
 
 ### 3. Rodada de réplica
 - O Advogado responde às melhores objeções do Cético.

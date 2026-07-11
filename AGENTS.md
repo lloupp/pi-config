@@ -79,7 +79,8 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `git-workflow`: commits, branches, diffs, PRs e changelog.
 - `loop-engineering`: **otimizar algo que já funciona** contra um sinal medível (desempenho, cobertura, qualidade).
 - `learn-repository`: aprender estrutura, comandos e convenções de um repositório e salvar memória persistente.
-- `self-debate`: decisões com trade-offs (arquitetura, bibliotecas, refatorar vs corrigir); debater posições opostas antes de decidir.
+- `self-debate`: **decidir entre opções** com trade-offs (arquitetura, bibliotecas, refatorar vs corrigir); debater posições opostas antes de decidir — decisões importantes podem usar um modelo free diferente por posição via `subagent`.
+- `orchestrator`: **planejar/desempacar/revisar com um modelo maior** (Nemotron 3 Ultra free via `subagent`) — tarefa complexa demais para o modelo padrão, agente travado após ~2 tentativas, ou revisão de mudança relevante.
 - `web-research`: pesquisar na internet com método — buscar, verificar fontes, citar URLs.
 - `test-coverage`: levar cobertura de testes a 100% com testes que verificam comportamento real, sem inflar cobertura.
 - `verify`: antes de declarar qualquer implementação como pronta — executar o fluxo afetado e observar o comportamento real.
