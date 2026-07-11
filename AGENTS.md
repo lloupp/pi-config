@@ -62,6 +62,7 @@ Após aprovação do usuário, use `/implement` ou implemente o plano em passos 
 - Use `web_search` e `web_fetch` quando precisar de informação externa ao projeto (documentação, erros, versões). Cite as URLs usadas.
 - Use `subagent` (mode=explore) para buscas amplas no código cuja resposta é curta — a leitura pesada fica no contexto do subagente, não no seu. A tarefa deve ser autocontida: o subagente não vê esta conversa.
 - Ferramentas `mcp_<servidor>_<tool>` vêm de servidores MCP configurados em `mcp.json` (extensão mcp). Elas só existem depois que o usuário roda `/mcp start` (liga todos os servidores) ou `/mcp start <servidor>` (liga só um); nunca ligam sozinhas. `/mcp stop [servidor]` desliga; `/mcp` mostra status. Não peça para "rodar /mcp start" — isso é um comando do usuário, não uma ferramenta sua.
+- As `mcp_context7_*` (após `/mcp start context7`) trazem documentação atualizada de bibliotecas e frameworks: use `resolve_library_id` para achar o ID da biblioteca e depois `query_docs` — **prefira-as a `web_search` para docs de biblioteca** (sintaxe de API, versões, migração); funciona em Termux e Linux.
 - As `mcp_playwright_*` automatizam o Chrome via Playwright: use `browser_navigate` para abrir páginas, `browser_snapshot` para ler o estado da página (prefira ao screenshot), `browser_click`/`browser_type` para interagir e `browser_close` ao terminar. Se uma tool MCP falhar por desconexão, avise que o usuário precisa rodar `/mcp reload`. O servidor playwright só funciona em Linux (Chrome não roda nativo no Termux).
 - Edições em `.js`, `.py`, `.sh` e `.json` passam por verificação automática de sintaxe (auto-check); se o resultado da edição trouxer um erro `[auto-check]`, corrija imediatamente antes de prosseguir.
 - Antes de editar arquivos existentes, leia o arquivo relevante.
@@ -83,6 +84,9 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `test-coverage`: levar cobertura de testes a 100% com testes que verificam comportamento real, sem inflar cobertura.
 - `verify`: antes de declarar qualquer implementação como pronta — executar o fluxo afetado e observar o comportamento real.
 - `skill-creator`: criar ou reformar skills — entender o gatilho, checar sobreposição, frontmatter válido, registrar e testar.
+- `mcp-attach`: **plugar um servidor MCP pronto** — mcp.json com backup, segredos via env, /mcp start e teste.
+- `mcp-create`: **criar um servidor MCP do zero** (Node sem dependências, template testado, validação via pipe).
+- `api-to-mcp`: **transformar uma API/site em MCP** — descobrir contrato (OpenAPI/docs), mapear endpoints em tools, gerar e acoplar.
 
 ## Segurança
 Tenha cuidado especial com comandos destrutivos ou globais:

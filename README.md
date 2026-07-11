@@ -6,9 +6,9 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 
 - `AGENTS.md` — instruções globais do agente
 - `settings.json` — preferências (tema, modelo padrão)
-- `mcp.json` — servidores MCP (formato igual ao do Claude Desktop/Code); vem com o `@playwright/mcp` (automação do Chrome) pré-configurado — funciona só em Linux (Chrome não roda nativo no Termux)
+- `mcp.json` — servidores MCP (formato igual ao do Claude Desktop/Code); vem com o `@playwright/mcp` (automação do Chrome; só Linux — Chrome não roda nativo no Termux) e o `@upstash/context7-mcp` (documentação atualizada de bibliotecas; Termux e Linux; opcional: `CONTEXT7_API_KEY` no `env` aumenta o rate limit)
 - `prompts/` — templates reutilizáveis (`review`, `debug`, `commit-msg`, `termux-setup`)
-- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `termux-integration`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`, `verify`, `skill-creator`
+- `skills/` — skills: `agent-loop`, `debug-loop`, `code-review`, `git-workflow`, `termux-dev`, `termux-integration`, `learn-repository`, `loop-engineering`, `self-debate`, `web-research`, `test-coverage`, `verify`, `skill-creator`, `mcp-attach`, `mcp-create`, `api-to-mcp`
 - `extensions/` — extensões TypeScript personalizadas:
   - `persistent-memory` — memória persistente entre sessões
   - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões
