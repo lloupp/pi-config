@@ -74,6 +74,7 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `debug-loop`: **consertar algo quebrado** — bugs, erros de build, testes falhando, stack traces.
 - `code-review`: revisão, auditoria, segurança, qualidade.
 - `termux-dev`: Termux, Android, shell, pacotes e ambiente.
+- `termux-integration`: melhorar teclado, corretor e integração Termux↔Android — aplica config com backup e ensina os gestos.
 - `git-workflow`: commits, branches, diffs, PRs e changelog.
 - `loop-engineering`: **otimizar algo que já funciona** contra um sinal medível (desempenho, cobertura, qualidade).
 - `learn-repository`: aprender estrutura, comandos e convenções de um repositório e salvar memória persistente.

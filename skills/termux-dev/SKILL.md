@@ -9,6 +9,7 @@ compatibility: Termux/Android.
 Use esta skill quando o usuário pedir ajuda com Termux, Android, instalação de pacotes, shell, ambiente de desenvolvimento ou comandos Linux no celular.
 
 ## Diretrizes
+- Para configurar teclado, corretor, gestos ou integração com o Android (termux-api), invoque a skill `termux-integration` — ela tem o procedimento executável com backup.
 - Lembre que o ambiente é Termux, sem `sudo` e normalmente sem systemd.
 - Use `pkg`/`apt` do Termux; rode `pkg update` antes de instalar quando a instalação falhar por índice velho.
 - Prefira caminhos sob `/data/data/com.termux/files/home` e `$PREFIX`.
