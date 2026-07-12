@@ -21,7 +21,7 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `safety-guard` — proteção contra comandos perigosos
   - `termux-tools` — comandos e ferramentas para Termux
   - `pi-status` — status no footer
-  - `update-pi` — comando `/update-pi`: git pull no repo `~/pi-config`, reinstala em `~/.pi/agent` e recarrega numa tacada só
+  - `update-pi` — comando `/update-pi`: git pull no repo `~/pi-config`, reinstala em `~/.pi/agent` e recarrega numa tacada só; ao iniciar o Pi, verifica em segundo plano se há commits novos no remoto e avisa quando é hora de rodar `/update-pi`
 - `themes/` — tema customizado `termux-neon`
 - `install-pi-config.sh` — script de instalação
 
