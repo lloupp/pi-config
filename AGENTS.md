@@ -64,7 +64,7 @@ Após aprovação do usuário, use `/implement` ou implemente o plano em passos 
 - Ferramentas `mcp_<servidor>_<tool>` vêm de servidores MCP configurados em `mcp.json` (extensão mcp). Elas só existem depois que o usuário roda `/mcp start` (liga todos os servidores) ou `/mcp start <servidor>` (liga só um); nunca ligam sozinhas. `/mcp stop [servidor]` desliga; `/mcp` mostra status. Não peça para "rodar /mcp start" — isso é um comando do usuário, não uma ferramenta sua.
 - As `mcp_context7_*` (após `/mcp start context7`) trazem documentação atualizada de bibliotecas e frameworks: use `resolve_library_id` para achar o ID da biblioteca e depois `query_docs` — **prefira-as a `web_search` para docs de biblioteca** (sintaxe de API, versões, migração); funciona em Termux e Linux.
 - As `mcp_playwright_*` automatizam o Chrome via Playwright: use `browser_navigate` para abrir páginas, `browser_snapshot` para ler o estado da página (prefira ao screenshot), `browser_click`/`browser_type` para interagir e `browser_close` ao terminar. Se uma tool MCP falhar por desconexão, avise que o usuário precisa rodar `/mcp reload`. O servidor playwright só funciona em Linux (Chrome não roda nativo no Termux).
-- Edições em `.js`, `.py`, `.sh` e `.json` passam por verificação automática de sintaxe (auto-check); se o resultado da edição trouxer um erro `[auto-check]`, corrija imediatamente antes de prosseguir.
+- Edições em `.js`, `.py`, `.sh`, `.json` e no frontmatter de `SKILL.md` passam por verificação automática de sintaxe (auto-check); se o resultado da edição trouxer um erro `[auto-check]`, corrija imediatamente antes de prosseguir.
 - Antes de editar arquivos existentes, leia o arquivo relevante.
 - Prefira `read` para examinar arquivos em vez de `cat`/`sed`, quando estiver usando ferramentas do Pi.
 - Use `edit` para mudanças pontuais e `write` somente para arquivos novos ou reescritas completas justificadas.
@@ -95,7 +95,9 @@ Tenha cuidado especial com comandos destrutivos ou globais:
 - `chmod -R`, `chown -R`
 - `pkg uninstall`, `pkg remove`, `apt purge`
 - `git reset --hard`, `git clean -fd`
+- `git push --force` (reescreve histórico remoto)
 - `curl | sh`, `wget | sh`
+- `dd of=/dev/...`, `mkfs`
 
 Regras:
 - Explique consequências antes de sugerir comandos que apagam dados ou alteram configuração global.
@@ -107,6 +109,8 @@ Regras:
 
 ## Git
 - Cada `write`/`edit` gera um checkpoint automático (extensão checkpoint). Se o usuário quiser reverter uma edição sua, sugira `/checkpoints` e `/undo` — funciona mesmo fora de repositório git.
+- A configuração do Pi sincroniza entre máquinas via repo `~/pi-config`: `/update-pi` baixa e aplica (o aviso de atualização aparece ao iniciar); `/sync-pi` publica as modificações locais de `~/.pi/agent` no repo. São comandos do usuário — sugira-os quando ele modificar a config ou perguntar como sincronizar; não os execute por conta própria.
+- Tarefas longas: a extensão notify-done avisa o usuário (notificação do sistema) quando um turno demora mais que ~90s; `/notify` ajusta.
 - Antes de mudanças grandes, verifique `git status --short` quando estiver em um repositório.
 - Não faça commit automaticamente, a menos que o usuário peça.
 - Não faça push automaticamente, a menos que o usuário peça explicitamente.

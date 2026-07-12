@@ -14,14 +14,15 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões
   - `web-tools` — ferramentas `web_search` e `web_fetch` para navegar na internet
   - `checkpoint` — snapshot automático antes de cada edição do agente; `/undo` e `/checkpoints` para reverter
-  - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json); erro volta direto para o agente corrigir; `/autocheck on|off`
+  - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json e frontmatter de SKILL.md); erro volta direto para o agente corrigir; `/autocheck on|off`
   - `subagent` — ferramenta `subagent`: delega tarefas a um `pi -p` com contexto isolado (modo explore somente leitura ou full); aceita `provider`/`model`/`thinking` para rodar com um modelo alternativo (base das skills `orchestrator` e do debate multi-modelo do `self-debate`)
-  - `mcp` — cliente MCP (Model Context Protocol) via stdio, sem dependências; lê `mcp.json` e registra cada tool do servidor como `mcp_<servidor>_<tool>`; `/mcp` mostra status, `/mcp reload` reconecta
+  - `mcp` — cliente MCP (Model Context Protocol) via stdio, sem dependências; lê `mcp.json` e registra cada tool do servidor como `mcp_<servidor>_<tool>`; `/mcp start` liga todos (ou `/mcp start <servidor>` liga um), `/mcp stop` desliga, `/mcp` mostra status, `/mcp reload` reconecta
   - `plan-tasks` — modo plano e gestão de tarefas
   - `safety-guard` — proteção contra comandos perigosos
   - `termux-tools` — comandos e ferramentas para Termux
   - `pi-status` — status no footer
-  - `update-pi` — comando `/update-pi`: git pull no repo `~/pi-config`, reinstala em `~/.pi/agent` e recarrega numa tacada só; ao iniciar o Pi, verifica em segundo plano se há commits novos no remoto e avisa quando é hora de rodar `/update-pi`
+  - `update-pi` — comando `/update-pi`: git pull no repo `~/pi-config`, reinstala em `~/.pi/agent` e recarrega numa tacada só; ao iniciar o Pi, verifica em segundo plano se há commits novos no remoto e avisa quando é hora de rodar `/update-pi`; e `/sync-pi` faz o caminho inverso — copia `~/.pi/agent` para o repo, commita e faz push (com rebase antes, para não conflitar com outra máquina)
+  - `notify-done` — notificação do sistema (termux-notification no Android, notify-send no Linux) quando um turno do agente demora mais que o limiar (90s); `/notify on|off|<segundos>` ajusta
 - `themes/` — tema customizado `termux-neon`
 - `install-pi-config.sh` — script de instalação
 

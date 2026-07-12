@@ -10,6 +10,9 @@ const destructiveBashPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\bchown\s+-R\b/i, label: "chown recursivo" },
   { pattern: /\bcurl\b[^\n|;]*\|\s*(?:sh|bash)\b/i, label: "curl pipe shell" },
   { pattern: /\bwget\b[^\n|;]*\|\s*(?:sh|bash)\b/i, label: "wget pipe shell" },
+  { pattern: /\bgit\s+push\b[^\n;|&]*(?:--force(?:-with-lease)?\b|\s-f\b)/i, label: "push forçado (reescreve histórico remoto)" },
+  { pattern: /\bdd\b[^\n;|&]*\bof=\/dev\//i, label: "escrita direta em dispositivo" },
+  { pattern: /\bmkfs(\.\w+)?\b/i, label: "formatação de sistema de arquivos" },
 ];
 
 const protectedPathPatterns: Array<{ pattern: RegExp; label: string }> = [

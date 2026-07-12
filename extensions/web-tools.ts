@@ -60,17 +60,28 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+// Redirects são seguidos manualmente para revalidar cada destino: com redirect
+// automático, uma página externa poderia redirecionar para localhost/rede interna
+// e escapar do bloqueio de hosts (SSRF).
 async function fetchWithTimeout(url: URL, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onOuterAbort = () => controller.abort();
   signal?.addEventListener("abort", onOuterAbort);
   try {
-    return await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5" },
-    });
+    let current = url;
+    for (let hop = 0; hop < 5; hop++) {
+      const res = await fetch(current, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5" },
+      });
+      if (res.status < 300 || res.status >= 400) return res;
+      const location = res.headers.get("location");
+      if (!location) return res;
+      current = validateUrl(new URL(location, current).toString());
+    }
+    throw new Error(`Redirects demais (máx. 5) a partir de ${url}`);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onOuterAbort);

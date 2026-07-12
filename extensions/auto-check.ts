@@ -52,7 +52,28 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // SKILL.md: frontmatter YAML com exatamente name/description/compatibility
+  // (mesma validação da Fase 6 do skill-creator). Sem python3+yaml → melhor-esforço, ignora.
+  async function checkSkillFrontmatter(absPath: string): Promise<string | undefined> {
+    const script = [
+      "import re, sys",
+      "try:",
+      "    import yaml",
+      "except ImportError:",
+      "    sys.exit(0)",
+      "t = open(sys.argv[1], encoding='utf-8').read()",
+      "m = re.match(r'^---\\n(.*?)\\n---\\n', t, re.S)",
+      "assert m, 'SKILL.md sem frontmatter ---...---'",
+      "d = yaml.safe_load(m.group(1))",
+      "assert isinstance(d, dict), 'frontmatter nao e um mapa YAML (dois-pontos sem aspas na description?)'",
+      "keys = sorted(d.keys())",
+      "assert keys == ['compatibility', 'description', 'name'], f'chaves devem ser name/description/compatibility, achei: {keys}'",
+    ].join("\n");
+    return checkCommand("python3", ["-c", script, absPath]);
+  }
+
   async function runCheck(absPath: string): Promise<string | undefined> {
+    if (absPath.endsWith("SKILL.md")) return checkSkillFrontmatter(absPath);
     const ext = extname(absPath).toLowerCase();
     switch (ext) {
       case ".js":
@@ -100,13 +121,13 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("autocheck", {
-    description: "Liga/desliga verificação automática de sintaxe após edições. Uso: /autocheck [on|off]",
+    description: "Liga/desliga verificação automática de sintaxe após edições (js, py, sh, json, frontmatter de SKILL.md). Uso: /autocheck [on|off]",
     handler: async (args, ctx) => {
       const arg = args.trim().toLowerCase();
       if (arg === "on") enabled = true;
       else if (arg === "off") enabled = false;
       else enabled = !enabled;
-      ctx.ui.notify(`Auto-check: ${enabled ? "ligado" : "desligado"} (js, py, sh, json)`, "info");
+      ctx.ui.notify(`Auto-check: ${enabled ? "ligado" : "desligado"} (js, py, sh, json, SKILL.md)`, "info");
     },
   });
 }
