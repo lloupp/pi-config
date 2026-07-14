@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 type TaskAction = "list" | "add" | "done" | "open" | "clear";
 interface Task {
@@ -17,7 +17,6 @@ interface TaskDetails {
 }
 
 const readonlyTools = ["read", "grep", "find", "ls", "project_snapshot"];
-const blockedInPlan = new Set(["write", "edit"]);
 
 // Comandos de leitura permitidos no modo plano (primeiro token).
 const planBashAllowlist = new Set([
@@ -80,6 +79,77 @@ export default function (pi: ExtensionAPI) {
     writeFileSync(planFilePath, content, "utf8");
   }
 
+  // Diretório onde os planos vivem; a escrita no modo plano é liberada só aqui dentro.
+  function plansDir(ctx: ExtensionContext) {
+    return resolve(ctx.cwd, ".pi", "plans");
+  }
+
+  // True se `abs` é um arquivo DENTRO de .pi/plans/ (não o próprio dir, sem escapar via ..).
+  function isInsidePlans(ctx: ExtensionContext, abs: string): boolean {
+    const rel = relative(plansDir(ctx), abs);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  }
+
+  // Persiste o estado do plano na sessão para sobreviver a retomadas (resume).
+  function persistPlanState(ctx: ExtensionContext) {
+    try {
+      const slug = planFilePath ? basename(planFilePath, ".md") : undefined;
+      pi.appendEntry("plan-tasks-state", { planMode, slug, planFileRel });
+    } catch {
+      /* sessão sem persistência disponível */
+    }
+  }
+
+  // Restaura planFilePath/planFileRel e, se estava em modo plano, reativa o bloqueio de escrita.
+  function restorePlanState(ctx: ExtensionContext) {
+    const entries = ctx.sessionManager.getEntries();
+    let found: { planMode?: boolean; slug?: string; planFileRel?: string } | undefined;
+    for (const e of entries) {
+      const entry = e as any;
+      if (entry.type === "custom" && entry.customType === "plan-tasks-state") found = entry.data;
+    }
+    if (!found) return;
+    planFileRel = found.planFileRel || planFileRel;
+    if (found.slug) planFilePath = resolve(ctx.cwd, ".pi", "plans", `${found.slug}.md`);
+    if (found.planMode) {
+      planMode = true;
+      if (activeBeforePlan === undefined) activeBeforePlan = pi.getActiveTools();
+      pi.setActiveTools(planTools());
+    }
+    updatePlanUi(ctx);
+  }
+
+  // Reabre um plano salvo em .pi/plans/<slug>.md para revisão/implementação.
+  function openPlan(ctx: ExtensionContext, slug?: string) {
+    if (!slug) {
+      ctx.ui.notify("Uso: /open-plan <slug>  (liste com /plans)", "warning");
+      return;
+    }
+    const clean = slug.replace(/\.md$/, "");
+    const target = resolve(ctx.cwd, ".pi", "plans", `${clean}.md`);
+    if (!isInsidePlans(ctx, target)) {
+      ctx.ui.notify(`Slug inválido: ${slug} — o plano deve ficar dentro de .pi/plans/ (sem barras nem "..").`, "error");
+      return;
+    }
+    if (!existsSync(target)) {
+      ctx.ui.notify(`Plano não encontrado: ${clean} (.pi/plans/${clean}.md)`, "error");
+      return;
+    }
+    if (!planMode) activeBeforePlan = pi.getActiveTools();
+    planMode = true;
+    planFilePath = target;
+    planFileRel = relative(ctx.cwd, target) || `${clean}.md`;
+    mkdirSync(dirname(target), { recursive: true });
+    pi.setActiveTools(planTools());
+    updatePlanUi(ctx);
+    persistPlanState(ctx);
+    const content = readPlan();
+    pi.sendUserMessage(
+      `Reabrindo plano salvo em ${planFileRel}. O conteúdo atual está abaixo — revise, amplie ou ajuste e mantenha os passos numerados. ` +
+        `Não edite outros arquivos. Quando estiver pronto, chame exit_plan para aprovar/implementar.\n\n---\n${content}`,
+    );
+  }
+
   // Cria tarefas a partir das linhas numeradas de nível superior do plano (1. ... / 1) ...).
   function seedTasksFromPlan(content: string) {
     const items: string[] = [];
@@ -121,6 +191,16 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // Ferramentas do modo plano: mantém write/edit NO schema para que o agente possa gravar
+  // o arquivo de plano; o bloqueio de outras gravações é feito pelo guard em tool_call,
+  // não removendo as ferramentas (senão a exceção do arquivo de plano vira código morto).
+  function planTools() {
+    const set = new Set<string>([...readonlyTools, ...pi.getActiveTools()]);
+    set.add("write");
+    set.add("edit");
+    return [...set];
+  }
+
   function enablePlan(ctx: ExtensionContext, objective?: string) {
     if (!planMode) activeBeforePlan = pi.getActiveTools();
     planMode = true;
@@ -128,9 +208,10 @@ export default function (pi: ExtensionAPI) {
     planFilePath = resolve(ctx.cwd, ".pi", "plans", `${slug}.md`);
     planFileRel = relative(ctx.cwd, planFilePath) || `${slug}.md`;
     mkdirSync(dirname(planFilePath), { recursive: true });
-    pi.setActiveTools([...new Set([...readonlyTools, ...pi.getActiveTools().filter((t) => !blockedInPlan.has(t))])]);
+    pi.setActiveTools(planTools());
     updatePlanUi(ctx);
-    if (ctx.hasUI) ctx.ui.notify("Modo plano ativado: escrita bloqueada, foco em análise e plano.", "info");
+    persistPlanState(ctx);
+    if (ctx.hasUI) ctx.ui.notify("Modo plano ativo: gravação permitida só no arquivo de plano; demais escritas bloqueadas.", "info");
   }
 
   function disablePlan(ctx: ExtensionContext) {
@@ -138,6 +219,7 @@ export default function (pi: ExtensionAPI) {
     if (activeBeforePlan) pi.setActiveTools(activeBeforePlan);
     activeBeforePlan = undefined;
     updatePlanUi(ctx);
+    persistPlanState(ctx);
   }
 
   // Aprova o plano: libera escrita, semeia tarefas a partir do arquivo. Retorna nº de tarefas.
@@ -157,24 +239,29 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     reconstructTasks(ctx);
+    restorePlanState(ctx);
     updatePlanUi(ctx);
   });
   pi.on("session_tree", async (_event, ctx) => {
     reconstructTasks(ctx);
+    restorePlanState(ctx);
     updatePlanUi(ctx);
   });
 
   pi.registerCommand("plan", {
-    description: "Ativa modo plano: análise sem escrita, plano gravado em arquivo",
+    description: "Ativa modo plano: análise sem escrita, plano gravado em .pi/plans/<slug>.md",
     handler: async (args, ctx) => {
       const objective = args?.trim() || "a tarefa solicitada";
       enablePlan(ctx, args?.trim());
-      pi.sendUserMessage(
-        `Modo plano ativo. Analise o projeto e crie um plano para: ${objective}\n\n` +
-          `Escreva o plano no arquivo ${planFileRel} (é o ÚNICO arquivo que você pode gravar agora). ` +
-          `Estruture com um objetivo curto, passos NUMERADOS (1., 2., ...), riscos e comandos de validação. ` +
-          `Não edite mais nenhum arquivo. Quando o plano estiver pronto, chame a ferramenta exit_plan para apresentá-lo ao usuário e pedir aprovação.`,
-      );
+      const exists = planFilePath && existsSync(planFilePath);
+      const base =
+        `Escreva/atualize o plano no arquivo ${planFileRel} (é o ÚNICO arquivo que você pode gravar agora). ` +
+        `Estruture com um objetivo curto, passos NUMERADOS (1., 2., ...), riscos e comandos de validação. ` +
+        `Não edite mais nenhum arquivo. Quando o plano estiver pronto, chame a ferramenta exit_plan para apresentá-lo ao usuário e pedir aprovação.`;
+      const msg = exists
+        ? `Modo plano ativo. Já existe um plano em ${planFileRel} — revise e atualize-o (mantenha os passos numerados). ${base}`
+        : `Modo plano ativo. Analise o projeto e crie um plano para: ${objective}\n\n${base}`;
+      pi.sendUserMessage(msg);
     },
   });
 
@@ -182,6 +269,7 @@ export default function (pi: ExtensionAPI) {
     description: "Aprova o plano atual: libera escrita e semeia tarefas",
     handler: async (args, ctx) => {
       const count = approve(ctx);
+      persistPlanState(ctx);
       const extra = args?.trim() ? `\nInstruções extras: ${args.trim()}` : "";
       pi.sendUserMessage(
         `Plano aprovado. Implemente em passos pequenos, marcando cada tarefa com task_list (done). ` +
@@ -194,6 +282,40 @@ export default function (pi: ExtensionAPI) {
     description: "Mostra tarefas da sessão atual",
     handler: async (_args, ctx) => {
       ctx.ui.notify(renderTasks(tasks), "info");
+    },
+  });
+
+  pi.registerCommand("open-plan", {
+    description: "Reabre um plano salvo em .pi/plans/<slug>.md para revisão/implementação",
+    handler: async (args, ctx) => {
+      openPlan(ctx, args?.trim());
+    },
+  });
+
+  pi.registerCommand("plans", {
+    description: "Lista os planos salvos em .pi/plans/ (e abre um, se houver UI)",
+    handler: async (_args, ctx) => {
+      const dir = resolve(ctx.cwd, ".pi", "plans");
+      if (!existsSync(dir)) {
+        ctx.ui.notify("Nenhum plano salvo ainda (.pi/plans/ inexistente).", "info");
+        return;
+      }
+      const files = readdirSync(dir)
+        .filter((f) => f.endsWith(".md"))
+        .sort((a, b) => statSync(join(dir, b)).mtimeMs - statSync(join(dir, a)).mtimeMs);
+      if (files.length === 0) {
+        ctx.ui.notify("Nenhum plano salvo ainda.", "info");
+        return;
+      }
+      if (ctx.hasUI) {
+        const choice = await ctx.ui.select(
+          "Planos salvos — qual reabrir?",
+          [...files.map((f) => f.replace(/\.md$/, "")), "Cancelar"],
+        );
+        if (choice && choice !== "Cancelar") openPlan(ctx, choice);
+        return;
+      }
+      ctx.ui.notify(files.map((f) => "- " + f.replace(/\.md$/, "")).join("\n"), "info");
     },
   });
 
@@ -232,10 +354,12 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName === "write" || event.toolName === "edit") {
       const p = String((event.input as any).path ?? "");
       const abs = isAbsolute(p) ? resolve(p) : resolve(ctx.cwd, p);
-      if (planFilePath && abs === planFilePath) return undefined; // exceção: arquivo de plano
+      // Libera qualquer arquivo DENTRO de .pi/plans/ (robusto a nome escolhido pelo agente
+      // e seguro contra traversal), não só o caminho exato calculado no /plan.
+      if (isInsidePlans(ctx, abs)) return undefined;
       return {
         block: true,
-        reason: `Modo plano ativo: escrita bloqueada (exceto ${planFileRel}). Chame exit_plan quando o plano estiver pronto.`,
+        reason: `Modo plano ativo: escrita bloqueada — só é permitido gravar dentro de .pi/plans/ (ex.: ${planFileRel}). Chame exit_plan quando o plano estiver pronto.`,
       };
     }
 
@@ -275,6 +399,7 @@ export default function (pi: ExtensionAPI) {
       }
       if (!ctx.hasUI) {
         const n = approve(ctx);
+        persistPlanState(ctx);
         return { content: [{ type: "text", text: `Sem UI para confirmar: plano aprovado automaticamente. ${n} tarefa(s) criadas. Escrita liberada.` }] };
       }
 
@@ -287,6 +412,7 @@ export default function (pi: ExtensionAPI) {
 
         if (choice === "Aprovar e implementar") {
           const n = approve(ctx);
+          persistPlanState(ctx);
           return {
             content: [
               {
@@ -303,6 +429,7 @@ export default function (pi: ExtensionAPI) {
           const edited = await ctx.ui.editor("Editar plano", readPlan());
           if (edited !== undefined) {
             writePlan(edited);
+            persistPlanState(ctx);
             ctx.ui.notify("Plano atualizado.", "info");
           }
           continue; // reapresenta o gate
