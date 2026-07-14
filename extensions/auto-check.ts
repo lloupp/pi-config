@@ -62,7 +62,7 @@ export default function (pi: ExtensionAPI) {
       "except ImportError:",
       "    sys.exit(0)",
       "t = open(sys.argv[1], encoding='utf-8').read()",
-      "m = re.match(r'^---\\n(.*?)\\n---\\n', t, re.S)",
+      "m = re.match(r'^---\\r?\\n(.*?)\\r?\\n---\\r?\\n', t, re.S)",
       "assert m, 'SKILL.md sem frontmatter ---...---'",
       "d = yaml.safe_load(m.group(1))",
       "assert isinstance(d, dict), 'frontmatter nao e um mapa YAML (dois-pontos sem aspas na description?)'",

@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
@@ -49,7 +49,21 @@ async function loadStore(): Promise<MemoryStore> {
 
 async function saveStore(store: MemoryStore): Promise<void> {
   await mkdir(memoryDir, { recursive: true });
-  await writeFile(memoryFile, JSON.stringify(store, null, 2) + "\n", "utf8");
+  // Escrita atômica: grava em tmp e renomeia, evitando arquivo parcial/corrompido.
+  const tmp = `${memoryFile}.tmp`;
+  await writeFile(tmp, JSON.stringify(store, null, 2) + "\n", "utf8");
+  await rename(tmp, memoryFile);
+}
+
+// Serializa o ciclo load→mutar→save no processo, evitando lost update / nextId colidido.
+let writeChain: Promise<unknown> = Promise.resolve();
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 function score(item: MemoryItem, query: string): number {
@@ -92,10 +106,9 @@ export default function (pi: ExtensionAPI) {
       limit: Type.Optional(Type.Number({ description: "Limite de resultados" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const store = await loadStore();
+      const currentRepo = ctx.cwd; // captura antes de qualquer await (ctx pode ficar stale)
       const action = String(params.action ?? "list");
       const scope = params.scope === "global" ? "global" : "repo";
-      const currentRepo = ctx.cwd;
       const limit = Math.max(1, Math.min(Number(params.limit ?? 20), 100));
 
       if (action === "add") {
@@ -105,31 +118,38 @@ export default function (pi: ExtensionAPI) {
           throw new Error("Possível segredo detectado. Não salve credenciais na memória persistente.");
         }
 
-        const now = new Date().toISOString();
-        const item: MemoryItem = {
-          id: store.nextId++,
-          scope,
-          repoKey: scope === "repo" ? currentRepo : undefined,
-          repoName: scope === "repo" ? repoName(currentRepo) : undefined,
-          text,
-          tags: normalizeTags(params.tags),
-          createdAt: now,
-          updatedAt: now,
-        };
-        store.items.push(item);
-        await saveStore(store);
-        return { content: [{ type: "text", text: `Memória salva: #${item.id}` }], details: { item } };
+        return withLock(async () => {
+          const store = await loadStore();
+          const now = new Date().toISOString();
+          const item: MemoryItem = {
+            id: store.nextId++,
+            scope,
+            repoKey: scope === "repo" ? currentRepo : undefined,
+            repoName: scope === "repo" ? repoName(currentRepo) : undefined,
+            text,
+            tags: normalizeTags(params.tags),
+            createdAt: now,
+            updatedAt: now,
+          };
+          store.items.push(item);
+          await saveStore(store);
+          return { content: [{ type: "text", text: `Memória salva: #${item.id}` }], details: { item } };
+        });
       }
 
       if (action === "forget") {
         const id = Number(params.id);
-        const before = store.items.length;
-        store.items = store.items.filter((item) => item.id !== id);
-        await saveStore(store);
-        const removed = before - store.items.length;
-        return { content: [{ type: "text", text: removed ? `Memória #${id} removida.` : `Memória #${id} não encontrada.` }], details: { id, removed } };
+        return withLock(async () => {
+          const store = await loadStore();
+          const before = store.items.length;
+          store.items = store.items.filter((item) => item.id !== id);
+          await saveStore(store);
+          const removed = before - store.items.length;
+          return { content: [{ type: "text", text: removed ? `Memória #${id} removida.` : `Memória #${id} não encontrada.` }], details: { id, removed } };
+        });
       }
 
+      const store = await loadStore();
       let items = store.items;
       if (scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === currentRepo);
       else if (params.scope === "global") items = items.filter((item) => item.scope === "global");
@@ -177,28 +197,38 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Possível segredo detectado. Memória não salva.", "error");
         return;
       }
-      const store = await loadStore();
-      const now = new Date().toISOString();
-      const item: MemoryItem = { id: store.nextId++, scope: "global", text, tags: [], createdAt: now, updatedAt: now };
-      store.items.push(item);
-      await saveStore(store);
-      ctx.ui.notify(`Memória salva: #${item.id}`, "info");
+      const id = await withLock(async () => {
+        const store = await loadStore();
+        const now = new Date().toISOString();
+        const item: MemoryItem = { id: store.nextId++, scope: "global", text, tags: [], createdAt: now, updatedAt: now };
+        store.items.push(item);
+        await saveStore(store);
+        return item.id;
+      });
+      ctx.ui.notify(`Memória salva: #${id}`, "info");
     },
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
-    const store = await loadStore();
-    const repoItems = store.items.filter((item) => item.scope === "repo" && item.repoKey === ctx.cwd).slice(-8);
-    const globalItems = store.items.filter((item) => item.scope === "global").slice(-5);
-    const items = [...globalItems, ...repoItems];
-    if (items.length === 0) return undefined;
+    // Em fluxos que trocam a sessão (ex.: /plan em modo -p), o ctx deste handler pode já
+    // estar stale ao entrar; qualquer acesso lança. Tratamos como "sem injeção neste turno".
+    try {
+      const cwd = ctx.cwd;
+      const store = await loadStore();
+      const repoItems = store.items.filter((item) => item.scope === "repo" && item.repoKey === cwd).slice(-8);
+      const globalItems = store.items.filter((item) => item.scope === "global").slice(-5);
+      const items = [...globalItems, ...repoItems];
+      if (items.length === 0) return undefined;
 
-    return {
-      message: {
-        customType: "persistent-memory-context",
-        content: `[MEMÓRIA PERSISTENTE RELEVANTE]\n${format(items)}\n\nUse essas memórias como contexto. Não revele dados sensíveis e não salve segredos.`,
-        display: false,
-      },
-    };
+      return {
+        message: {
+          customType: "persistent-memory-context",
+          content: `[MEMÓRIA PERSISTENTE RELEVANTE]\n${format(items)}\n\nUse essas memórias como contexto. Não revele dados sensíveis e não salve segredos.`,
+          display: false,
+        },
+      };
+    } catch {
+      return undefined;
+    }
   });
 }

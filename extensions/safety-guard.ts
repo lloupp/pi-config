@@ -15,12 +15,20 @@ const destructiveBashPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\bmkfs(\.\w+)?\b/i, label: "formatação de sistema de arquivos" },
 ];
 
-const protectedPathPatterns: Array<{ pattern: RegExp; label: string }> = [
+// Segredos: protegidos em leitura, escrita/edição e bash.
+const secretPathPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /(^|\/)\.env(?:\.|$)/i, label: "arquivo .env" },
-  { pattern: /(^|\/)\.git(?:\/|$)/i, label: "diretório .git" },
-  { pattern: /(^|\/)node_modules(?:\/|$)/i, label: "node_modules" },
   { pattern: /(^|\/)\.ssh(?:\/|$)/i, label: "chaves SSH" },
   { pattern: /(^|\/)auth\.json$/i, label: "auth.json" },
+  { pattern: /(^|\/)credentials\.json$/i, label: "credentials.json" },
+  { pattern: /\.pem$/i, label: "certificado/chave .pem" },
+  { pattern: /(^|\/)id_(?:rsa|ed25519)(?:\.pub)?$/i, label: "chave privada SSH" },
+];
+
+// Infra: protegida só em escrita/edição — ler é legítimo e frequente.
+const infraPathPatterns: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /(^|\/)\.git(?:\/|$)/i, label: "diretório .git" },
+  { pattern: /(^|\/)node_modules(?:\/|$)/i, label: "node_modules" },
 ];
 
 async function confirmOrBlock(ctx: any, title: string, body: string) {
@@ -35,19 +43,51 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (isToolCallEventType("bash", event)) {
       const command = event.input.command;
-      const match = destructiveBashPatterns.find(({ pattern }) => pattern.test(command));
+
+      const danger = destructiveBashPatterns.find(({ pattern }) => pattern.test(command));
+      if (danger) {
+        return confirmOrBlock(
+          ctx,
+          `⚠️ Comando perigoso: ${danger.label}`,
+          `O agente quer executar:\n\n${command}\n\nPermitir?`,
+        );
+      }
+
+      // Fecha a brecha de ler segredos por bash (cat/grep/less .env, id_rsa etc.).
+      // Tokeniza o comando para reusar os padrões ancorados em caminho: um token
+      // isolado como `.env` casa por `^`, `server.pem` casa por `$`.
+      const tokens = command.split(/[\s;|&><()"'`=]+/).filter(Boolean);
+      const secret = secretPathPatterns.find(({ pattern }) =>
+        tokens.some((token: string) => pattern.test(token)),
+      );
+      if (secret) {
+        return confirmOrBlock(
+          ctx,
+          `⚠️ Acesso a arquivo sensível: ${secret.label}`,
+          `O agente quer executar:\n\n${command}\n\nPermitir?`,
+        );
+      }
+
+      return undefined;
+    }
+
+    if (isToolCallEventType("read", event)) {
+      const path = event.input.path;
+      const match = secretPathPatterns.find(({ pattern }) => pattern.test(path));
       if (!match) return undefined;
 
       return confirmOrBlock(
         ctx,
-        `⚠️ Comando perigoso: ${match.label}`,
-        `O agente quer executar:\n\n${command}\n\nPermitir?`,
+        `⚠️ Leitura de arquivo sensível: ${match.label}`,
+        `O agente quer ler:\n\n${path}\n\nPermitir?`,
       );
     }
 
     if (isToolCallEventType("write", event) || isToolCallEventType("edit", event)) {
       const path = event.input.path;
-      const match = protectedPathPatterns.find(({ pattern }) => pattern.test(path));
+      const match = [...secretPathPatterns, ...infraPathPatterns].find(({ pattern }) =>
+        pattern.test(path),
+      );
       if (!match) return undefined;
 
       if (ctx.hasUI) ctx.ui.notify(`Proteção: ${path} (${match.label})`, "warning");

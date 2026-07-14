@@ -43,7 +43,8 @@ export default function (pi: ExtensionAPI) {
     if (!isToolCallEventType("write", event) && !isToolCallEventType("edit", event)) return undefined;
     const rawPath = event.input.path;
     if (!rawPath) return undefined;
-    const absPath = isAbsolute(rawPath) ? rawPath : join(ctx.cwd, rawPath);
+    const cwd = ctx.cwd; // captura antes do await (ctx pode ficar stale ao usar em relative() adiante)
+    const absPath = isAbsolute(rawPath) ? rawPath : join(cwd, rawPath);
 
     // Snapshot é melhor-esforço: qualquer falha aqui nunca deve bloquear a edição.
     try {
@@ -55,7 +56,7 @@ export default function (pi: ExtensionAPI) {
       }
       snapshots = pushSnapshot(snapshots, {
         id: nextId++,
-        path: relative(ctx.cwd, absPath) || absPath,
+        path: relative(cwd, absPath) || absPath,
         absPath,
         existedBefore,
         content,

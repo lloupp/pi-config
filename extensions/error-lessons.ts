@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
@@ -50,7 +50,21 @@ async function loadStore(): Promise<LessonStore> {
 
 async function saveStore(store: LessonStore): Promise<void> {
   await mkdir(lessonsDir, { recursive: true });
-  await writeFile(lessonsFile, JSON.stringify(store, null, 2) + "\n", "utf8");
+  // Escrita atômica: grava em tmp e renomeia, evitando arquivo parcial/corrompido.
+  const tmp = `${lessonsFile}.tmp`;
+  await writeFile(tmp, JSON.stringify(store, null, 2) + "\n", "utf8");
+  await rename(tmp, lessonsFile);
+}
+
+// Serializa o ciclo load→mutar→save no processo, evitando lost update / nextId colidido.
+let writeChain: Promise<unknown> = Promise.resolve();
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 function score(item: Lesson, query: string): number {
@@ -97,7 +111,7 @@ export default function (pi: ExtensionAPI) {
       limit: Type.Optional(Type.Number({ description: "Limite de resultados" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const store = await loadStore();
+      const cwd = ctx.cwd; // captura antes de qualquer await (ctx pode ficar stale)
       const action = String(params.action ?? "list");
       const scope = params.scope === "global" ? "global" : "repo";
       const limit = Math.max(1, Math.min(Number(params.limit ?? 20), 100));
@@ -111,34 +125,41 @@ export default function (pi: ExtensionAPI) {
           throw new Error("Possível segredo detectado. Não salve credenciais nas lições.");
         }
 
-        const item: Lesson = {
-          id: store.nextId++,
-          scope,
-          repoKey: scope === "repo" ? ctx.cwd : undefined,
-          repoName: scope === "repo" ? repoName(ctx.cwd) : undefined,
-          error,
-          cause: params.cause ? String(params.cause).trim() : undefined,
-          lesson,
-          tags: normalizeTags(params.tags),
-          createdAt: new Date().toISOString(),
-        };
-        store.items.push(item);
-        await saveStore(store);
-        return { content: [{ type: "text", text: `Lição registrada: #${item.id}` }], details: { item } };
+        return withLock(async () => {
+          const store = await loadStore();
+          const item: Lesson = {
+            id: store.nextId++,
+            scope,
+            repoKey: scope === "repo" ? cwd : undefined,
+            repoName: scope === "repo" ? repoName(cwd) : undefined,
+            error,
+            cause: params.cause ? String(params.cause).trim() : undefined,
+            lesson,
+            tags: normalizeTags(params.tags),
+            createdAt: new Date().toISOString(),
+          };
+          store.items.push(item);
+          await saveStore(store);
+          return { content: [{ type: "text", text: `Lição registrada: #${item.id}` }], details: { item } };
+        });
       }
 
       if (action === "forget") {
         const id = Number(params.id);
-        const before = store.items.length;
-        store.items = store.items.filter((item) => item.id !== id);
-        await saveStore(store);
-        const removed = before - store.items.length;
-        return { content: [{ type: "text", text: removed ? `Lição #${id} removida.` : `Lição #${id} não encontrada.` }], details: { id, removed } };
+        return withLock(async () => {
+          const store = await loadStore();
+          const before = store.items.length;
+          store.items = store.items.filter((item) => item.id !== id);
+          await saveStore(store);
+          const removed = before - store.items.length;
+          return { content: [{ type: "text", text: removed ? `Lição #${id} removida.` : `Lição #${id} não encontrada.` }], details: { id, removed } };
+        });
       }
 
+      const store = await loadStore();
       let items = store.items;
       if (params.scope === "global") items = items.filter((item) => item.scope === "global");
-      else if (params.scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === ctx.cwd);
+      else if (params.scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === cwd);
 
       if (action === "search") {
         const query = String(params.query ?? "").trim();
@@ -172,18 +193,25 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
-    const store = await loadStore();
-    const repoItems = store.items.filter((item) => item.scope === "repo" && item.repoKey === ctx.cwd).slice(-6);
-    const globalItems = store.items.filter((item) => item.scope === "global").slice(-4);
-    const items = [...globalItems, ...repoItems];
-    if (items.length === 0) return undefined;
+    // Em fluxos que trocam a sessão (ex.: /plan em modo -p), o ctx deste handler pode já
+    // estar stale ao entrar; qualquer acesso lança. Tratamos como "sem injeção neste turno".
+    try {
+      const cwd = ctx.cwd;
+      const store = await loadStore();
+      const repoItems = store.items.filter((item) => item.scope === "repo" && item.repoKey === cwd).slice(-6);
+      const globalItems = store.items.filter((item) => item.scope === "global").slice(-4);
+      const items = [...globalItems, ...repoItems];
+      if (items.length === 0) return undefined;
 
-    return {
-      message: {
-        customType: "error-lessons-context",
-        content: `[LIÇÕES DE ERROS ANTERIORES]\n${format(items)}\n\nEvite repetir esses erros. Se um erro novo relevante acontecer, registre a lição com error_lessons.`,
-        display: false,
-      },
-    };
+      return {
+        message: {
+          customType: "error-lessons-context",
+          content: `[LIÇÕES DE ERROS ANTERIORES]\n${format(items)}\n\nEvite repetir esses erros. Se um erro novo relevante acontecer, registre a lição com error_lessons.`,
+          display: false,
+        },
+      };
+    } catch {
+      return undefined;
+    }
   });
 }

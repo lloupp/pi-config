@@ -448,49 +448,56 @@ export default function mcpExtension(pi: ExtensionAPI) {
       "MCP sob demanda: /mcp start [servidor] liga (todos ou um só), /mcp stop [servidor] desliga, " +
       "/mcp reload [servidor] reconecta, /mcp status mostra estado",
     handler: async (args, ctx) => {
+      const cwd = ctx.cwd;
       const parts = args.trim().split(/\s+/).filter(Boolean);
       const cmd = (parts[0] ?? "").toLowerCase();
       const target = parts[1]; // nome de servidor opcional
       const only = target ? [target] : undefined;
 
-      if (cmd === "start" || cmd === "on") {
-        const summary = await connectServers(ctx.cwd, only);
-        ctx.ui.notify(`MCP start: ${summary.join(" · ")}`, "info");
-        return;
-      }
-
-      if (cmd === "stop" || cmd === "off") {
-        if (clients.size === 0) {
-          ctx.ui.notify("MCP: já estava desligado.", "info");
+      // loadConfigs/connectServers lançam se um mcp.json estiver malformado; capturamos
+      // aqui para que um JSON inválido não derrube o comando (inclusive o /mcp status).
+      try {
+        if (cmd === "start" || cmd === "on") {
+          const summary = await connectServers(cwd, only);
+          ctx.ui.notify(`MCP start: ${summary.join(" · ")}`, "info");
           return;
         }
-        const summary = stopServers(only);
-        ctx.ui.notify(`MCP stop: ${summary.join(" · ")}. Tools mcp_* correspondentes desativadas.`, "info");
-        return;
-      }
 
-      if (cmd === "reload") {
-        stopServers(only);
-        const summary = await connectServers(ctx.cwd, only);
-        ctx.ui.notify(`MCP reload: ${summary.join(" · ")}`, "info");
-        return;
-      }
+        if (cmd === "stop" || cmd === "off") {
+          if (clients.size === 0) {
+            ctx.ui.notify("MCP: já estava desligado.", "info");
+            return;
+          }
+          const summary = stopServers(only);
+          ctx.ui.notify(`MCP stop: ${summary.join(" · ")}. Tools mcp_* correspondentes desativadas.`, "info");
+          return;
+        }
 
-      if (clients.size === 0) {
-        const configs = loadConfigs(ctx.cwd);
-        const known = Object.keys(configs);
-        const hint = known.length > 0 ? ` Configurados: ${known.join(", ")}.` : "";
-        ctx.ui.notify(
-          `MCP: desligado. Use /mcp start para ligar todos, ou /mcp start <servidor> para ligar só um.${hint}`,
-          "info",
-        );
-        return;
+        if (cmd === "reload") {
+          stopServers(only);
+          const summary = await connectServers(cwd, only);
+          ctx.ui.notify(`MCP reload: ${summary.join(" · ")}`, "info");
+          return;
+        }
+
+        if (clients.size === 0) {
+          const configs = loadConfigs(cwd);
+          const known = Object.keys(configs);
+          const hint = known.length > 0 ? ` Configurados: ${known.join(", ")}.` : "";
+          ctx.ui.notify(
+            `MCP: desligado. Use /mcp start para ligar todos, ou /mcp start <servidor> para ligar só um.${hint}`,
+            "info",
+          );
+          return;
+        }
+        const lines = [...clients.values()].map((c) => {
+          const info = c.serverInfo.name ? ` (${c.serverInfo.name} ${c.serverInfo.version ?? ""})` : "";
+          return `${c.connected ? "✓" : "✗"} ${c.name}${info}: ${c.tools.length} tools`;
+        });
+        ctx.ui.notify(`MCP:\n${lines.join("\n")}`, "info");
+      } catch (err) {
+        ctx.ui.notify(`MCP: erro — ${err instanceof Error ? err.message : String(err)}`, "error");
       }
-      const lines = [...clients.values()].map((c) => {
-        const info = c.serverInfo.name ? ` (${c.serverInfo.name} ${c.serverInfo.version ?? ""})` : "";
-        return `${c.connected ? "✓" : "✗"} ${c.name}${info}: ${c.tools.length} tools`;
-      });
-      ctx.ui.notify(`MCP:\n${lines.join("\n")}`, "info");
     },
   });
 }
