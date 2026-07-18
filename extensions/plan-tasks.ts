@@ -393,18 +393,38 @@ export default function (pi: ExtensionAPI) {
       "Se o usuário rejeitar, refine o plano conforme o feedback retornado e chame exit_plan de novo.",
     ],
     parameters: Type.Object({}),
+    // Dialogs (ctx.ui.select/input) dentro de execute exigem execução sequencial: em modo
+    // paralelo (default do Pi), outro dialog concorrente (safety-guard, exit_plan duplicado)
+    // sobrescreve o slot único da TUI e a Promise do primeiro nunca resolve — o turno trava.
+    executionMode: "sequential",
     async execute(_id, _params, _signal, _onUpdate, ctx) {
       if (!planMode) {
-        return { content: [{ type: "text", text: "Não está em modo plano; nada a aprovar." }] };
+        return { content: [{ type: "text", text: "Não está em modo plano; nada a aprovar." }], details: undefined };
+      }
+      const plan = readPlan().trim();
+      if (!plan) {
+        return {
+          content: [{ type: "text", text: `O arquivo de plano ${planFileRel} está vazio ou não existe. Escreva o plano nele antes de chamar exit_plan.` }],
+          details: undefined,
+        };
       }
       if (!ctx.hasUI) {
         const n = approve(ctx);
         persistPlanState(ctx);
-        return { content: [{ type: "text", text: `Sem UI para confirmar: plano aprovado automaticamente. ${n} tarefa(s) criadas. Escrita liberada.` }] };
+        return { content: [{ type: "text", text: `Sem UI para confirmar: plano aprovado automaticamente. ${n} tarefa(s) criadas. Escrita liberada.` }], details: undefined };
       }
 
       while (true) {
-        const choice = await ctx.ui.select("Plano pronto — o que fazer?", [
+        // Mostra a proposta no próprio gate (título aceita multilinha), com teto para não
+        // empurrar as opções para fora da tela em terminais pequenos (Termux).
+        const current = readPlan().trim();
+        const lines = current.split(/\r?\n/);
+        const maxLines = 40;
+        const preview =
+          lines.length > maxLines
+            ? lines.slice(0, maxLines).join("\n") + `\n… (${lines.length - maxLines} linhas omitidas — íntegra em ${planFileRel})`
+            : current;
+        const choice = await ctx.ui.select(`Plano proposto (${planFileRel}):\n\n${preview}\n\nO que fazer?`, [
           "Aprovar e implementar",
           "Editar plano",
           "Rejeitar e continuar planejando",
@@ -422,6 +442,7 @@ export default function (pi: ExtensionAPI) {
                   `Implemente em passos pequenos, marcando cada tarefa concluída com task_list (action=done). Rode validações quando possível.`,
               },
             ],
+            details: undefined,
           };
         }
 
@@ -440,7 +461,7 @@ export default function (pi: ExtensionAPI) {
         const msg = feedback.trim()
           ? `Usuário quer continuar no modo plano. Ajuste o plano em ${planFileRel} conforme o feedback: ${feedback.trim()}. Depois chame exit_plan de novo.`
           : `Usuário quer continuar no modo plano. Refine o plano em ${planFileRel} e chame exit_plan de novo quando pronto.`;
-        return { content: [{ type: "text", text: msg }] };
+        return { content: [{ type: "text", text: msg }], details: undefined };
       }
     },
   });
