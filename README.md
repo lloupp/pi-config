@@ -26,6 +26,21 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
 - `themes/` — tema customizado `termux-neon`
 - `install-pi-config.sh` — script de instalação
 
+## Pacotes da comunidade
+
+Declarados no array `packages` do `settings.json`; o Pi baixa/atualiza no dispositivo com
+`pi install`/`pi update --extensions` (ambos são TypeScript puro, sem binários nativos — funcionam no Termux):
+
+- `@juicesharp/rpiv-ask-user-question` — ferramenta `ask_user_question`: o modelo faz perguntas
+  estruturadas (opções tipadas, multi-select, revisão antes de enviar) em vez de adivinhar.
+- `@vigolium/piolium` — auditorias de segurança multi-fase com subagents especializados, contexto
+  isolado e estado retomável; complementa as skills `code-review`/`verify`.
+
+Avaliados e descartados (fev/2026, catálogo pi.dev): `pi-mcp-adapter`, `pi-subagents` e
+`pi-web-access` fazem o mesmo que as extensões próprias `mcp`, `subagent` e `web-tools` — mantidas
+por serem enxutas, sem dependências e recém-auditadas; `context-mode` e `@hypabolic/pi-hypa`
+dependem de binários nativos, frágeis no Termux.
+
 ## Como instalar
 
 ```bash

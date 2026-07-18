@@ -65,6 +65,8 @@ Após aprovação do usuário, use `/implement` ou implemente o plano em passos 
 - As `mcp_context7_*` (após `/mcp start context7`) trazem documentação atualizada de bibliotecas e frameworks: use `resolve_library_id` para achar o ID da biblioteca e depois `query_docs` — **prefira-as a `web_search` para docs de biblioteca** (sintaxe de API, versões, migração); funciona em Termux e Linux.
 - As `mcp_playwright_*` automatizam o Chrome via Playwright: use `browser_navigate` para abrir páginas, `browser_snapshot` para ler o estado da página (prefira ao screenshot), `browser_click`/`browser_type` para interagir e `browser_close` ao terminar. Se uma tool MCP falhar por desconexão, avise que o usuário precisa rodar `/mcp reload`. O servidor playwright só funciona em Linux (Chrome não roda nativo no Termux).
 - Edições em `.js`, `.py`, `.sh`, `.json` e no frontmatter de `SKILL.md` passam por verificação automática de sintaxe (auto-check); se o resultado da edição trouxer um erro `[auto-check]`, corrija imediatamente antes de prosseguir.
+- Use `ask_user_question` (pacote rpiv-ask-user-question) quando fosse **adivinhar** uma preferência ou decisão do usuário: apresente opções tipadas em vez de escolher por ele. Não use para o que dá para verificar sozinho.
+- O pacote `@vigolium/piolium` adiciona auditoria de segurança multi-fase com subagents; sugira-o para auditorias dedicadas (complementa a skill `code-review`, não a substitui).
 - Antes de editar arquivos existentes, leia o arquivo relevante.
 - Prefira `read` para examinar arquivos em vez de `cat`/`sed`, quando estiver usando ferramentas do Pi.
 - Use `edit` para mudanças pontuais e `write` somente para arquivos novos ou reescritas completas justificadas.

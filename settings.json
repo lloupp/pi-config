@@ -3,5 +3,9 @@
   "defaultProvider": "openrouter",
   "defaultModel": "tencent/hy3:free",
   "defaultThinkingLevel": "medium",
-  "theme": "termux-neon"
+  "theme": "termux-neon",
+  "packages": [
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "npm:@vigolium/piolium"
+  ]
 }
