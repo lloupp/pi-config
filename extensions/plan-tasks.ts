@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Key, matchesKey, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -39,6 +40,95 @@ function isSafePlanBash(cmd: string): boolean {
   if (first === "git" && !/^git\s+(status|diff|log|show|branch|ls-files|rev-parse|remote|blame|describe|shortlog|tag)\b/.test(c)) return false;
   if (first === "npm" && !/^npm\s+(test|run|ls|list|view|outdated|why)\b/.test(c)) return false;
   return true;
+}
+
+type GateChoice = "approve" | "edit" | "reject";
+const gateOptions: { label: string; value: GateChoice }[] = [
+  { label: "Aprovar e implementar", value: "approve" },
+  { label: "Editar plano", value: "edit" },
+  { label: "Rejeitar e continuar planejando", value: "reject" },
+];
+
+// Gate de aprovação com o plano rolável (padrão do question.ts oficial): o título do
+// ctx.ui.select é estático e um plano longo estoura a tela do Termux sem scroll.
+// ↑↓/j/k rolam o plano; PgUp/PgDn/g/G saltam; ←→/Tab trocam a opção; Enter confirma;
+// 1-3 escolhem direto; Esc rejeita.
+async function planGate(ctx: ExtensionContext, plan: string, fileRel: string): Promise<GateChoice> {
+  if (ctx.mode !== "tui") {
+    // Sem TUI completa (ex.: RPC): cai no select simples com preview truncado.
+    const lines = plan.split(/\r?\n/);
+    const preview = lines.length > 40 ? lines.slice(0, 40).join("\n") + `\n… (íntegra em ${fileRel})` : plan;
+    const choice = await ctx.ui.select(`Plano proposto (${fileRel}):\n\n${preview}\n\nO que fazer?`, gateOptions.map((o) => o.label));
+    return gateOptions.find((o) => o.label === choice)?.value ?? "reject";
+  }
+
+  const result = await ctx.ui.custom<GateChoice | null>((tui, theme, _kb, done) => {
+    const planLines = plan.split(/\r?\n/);
+    const windowSize = 12;
+    let offset = 0;
+    let optionIndex = 0;
+    let maxOffset = 0; // recalculado no render (depende da largura p/ wrap)
+    let cached: string[] | undefined;
+
+    function refresh() {
+      cached = undefined;
+      tui.requestRender();
+    }
+
+    function handleInput(data: string) {
+      if (matchesKey(data, Key.up) || data === "k") { offset = Math.max(0, offset - 1); refresh(); return; }
+      if (matchesKey(data, Key.down) || data === "j") { offset = Math.min(maxOffset, offset + 1); refresh(); return; }
+      if (matchesKey(data, Key.pageUp) || data === "u") { offset = Math.max(0, offset - windowSize); refresh(); return; }
+      if (matchesKey(data, Key.pageDown) || data === "d") { offset = Math.min(maxOffset, offset + windowSize); refresh(); return; }
+      if (matchesKey(data, Key.home) || data === "g") { offset = 0; refresh(); return; }
+      if (matchesKey(data, Key.end) || data === "G") { offset = maxOffset; refresh(); return; }
+      if (matchesKey(data, Key.left)) { optionIndex = (optionIndex + gateOptions.length - 1) % gateOptions.length; refresh(); return; }
+      if (matchesKey(data, Key.right) || matchesKey(data, Key.tab)) { optionIndex = (optionIndex + 1) % gateOptions.length; refresh(); return; }
+      if (data >= "1" && data <= String(gateOptions.length)) { done(gateOptions[Number(data) - 1].value); return; }
+      if (matchesKey(data, Key.enter)) { done(gateOptions[optionIndex].value); return; }
+      if (matchesKey(data, Key.escape)) { done(null); return; }
+    }
+
+    function render(width: number): string[] {
+      if (cached) return cached;
+      const w = Math.max(20, width);
+      const wrapped = planLines.flatMap((l) => wrapTextWithAnsi(l || " ", w - 2));
+      maxOffset = Math.max(0, wrapped.length - windowSize);
+      if (offset > maxOffset) offset = maxOffset;
+      const visible = wrapped.slice(offset, offset + windowSize);
+
+      const lines: string[] = [];
+      lines.push(theme.fg("accent", "─".repeat(w)));
+      lines.push(theme.fg("accent", theme.bold(` Plano proposto (${fileRel})`)));
+      lines.push("");
+      for (const l of visible) lines.push(` ${l}`);
+      if (wrapped.length > windowSize) {
+        lines.push(theme.fg("dim", ` — linhas ${offset + 1}-${offset + visible.length} de ${wrapped.length} (↑↓ rolam) —`));
+      }
+      lines.push("");
+      for (let i = 0; i < gateOptions.length; i++) {
+        const sel = i === optionIndex;
+        const marker = sel ? theme.fg("accent", "→ ") : "  ";
+        const label = `${i + 1}. ${gateOptions[i].label}`;
+        lines.push(` ${marker}${sel ? theme.fg("accent", label) : theme.fg("text", label)}`);
+      }
+      lines.push("");
+      lines.push(theme.fg("dim", " ↑↓ rolar • ←→ opção • Enter confirmar • 1-3 direto • Esc rejeitar"));
+      lines.push(theme.fg("accent", "─".repeat(w)));
+      cached = lines;
+      return lines;
+    }
+
+    return {
+      render,
+      invalidate: () => {
+        cached = undefined;
+      },
+      handleInput,
+    };
+  });
+
+  return result ?? "reject";
 }
 
 function cloneTasks(tasks: Task[]) {
@@ -415,22 +505,9 @@ export default function (pi: ExtensionAPI) {
       }
 
       while (true) {
-        // Mostra a proposta no próprio gate (título aceita multilinha), com teto para não
-        // empurrar as opções para fora da tela em terminais pequenos (Termux).
-        const current = readPlan().trim();
-        const lines = current.split(/\r?\n/);
-        const maxLines = 40;
-        const preview =
-          lines.length > maxLines
-            ? lines.slice(0, maxLines).join("\n") + `\n… (${lines.length - maxLines} linhas omitidas — íntegra em ${planFileRel})`
-            : current;
-        const choice = await ctx.ui.select(`Plano proposto (${planFileRel}):\n\n${preview}\n\nO que fazer?`, [
-          "Aprovar e implementar",
-          "Editar plano",
-          "Rejeitar e continuar planejando",
-        ]);
+        const choice = await planGate(ctx, readPlan().trim(), planFileRel);
 
-        if (choice === "Aprovar e implementar") {
+        if (choice === "approve") {
           const n = approve(ctx);
           persistPlanState(ctx);
           return {
@@ -446,7 +523,7 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        if (choice === "Editar plano") {
+        if (choice === "edit") {
           const edited = await ctx.ui.editor("Editar plano", readPlan());
           if (edited !== undefined) {
             writePlan(edited);
