@@ -327,6 +327,16 @@ export default function (pi: ExtensionAPI) {
     return count;
   }
 
+  // Injeta a mensagem que efetivamente inicia a implementação (novo turno do agente).
+  // Sem isso, o modelo tende a encerrar o turno após o tool result do exit_plan.
+  function sendImplementPrompt(count: number, extra?: string) {
+    const extraText = extra?.trim() ? `\nInstruções extras: ${extra.trim()}` : "";
+    pi.sendUserMessage(
+      `Plano aprovado. Implemente em passos pequenos, marcando cada tarefa com task_list (done). ` +
+        `${count > 0 ? `Foram criadas ${count} tarefas a partir do plano.` : ""} Rode validações quando possível.${extraText}`,
+    );
+  }
+
   pi.on("session_start", async (_event, ctx) => {
     reconstructTasks(ctx);
     restorePlanState(ctx);
@@ -360,11 +370,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const count = approve(ctx);
       persistPlanState(ctx);
-      const extra = args?.trim() ? `\nInstruções extras: ${args.trim()}` : "";
-      pi.sendUserMessage(
-        `Plano aprovado. Implemente em passos pequenos, marcando cada tarefa com task_list (done). ` +
-          `${count > 0 ? `Foram criadas ${count} tarefas a partir do plano.` : ""} Rode validações quando possível.${extra}`,
-      );
+      sendImplementPrompt(count, args);
     },
   });
 
@@ -501,6 +507,7 @@ export default function (pi: ExtensionAPI) {
       if (!ctx.hasUI) {
         const n = approve(ctx);
         persistPlanState(ctx);
+        sendImplementPrompt(n);
         return { content: [{ type: "text", text: `Sem UI para confirmar: plano aprovado automaticamente. ${n} tarefa(s) criadas. Escrita liberada.` }], details: undefined };
       }
 
@@ -510,15 +517,9 @@ export default function (pi: ExtensionAPI) {
         if (choice === "approve") {
           const n = approve(ctx);
           persistPlanState(ctx);
+          sendImplementPrompt(n);
           return {
-            content: [
-              {
-                type: "text",
-                text:
-                  `Plano aprovado pelo usuário. Escrita liberada e ${n} tarefa(s) criadas a partir do plano. ` +
-                  `Implemente em passos pequenos, marcando cada tarefa concluída com task_list (action=done). Rode validações quando possível.`,
-              },
-            ],
+            content: [{ type: "text", text: `Plano aprovado pelo usuário; escrita liberada, ${n} tarefa(s) criadas.` }],
             details: undefined,
           };
         }
