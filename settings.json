@@ -1,11 +1,12 @@
 {
   "lastChangelogVersion": "0.84.1",
   "defaultProvider": "openrouter",
-  "defaultModel": "poolside/laguna-xs-2.1:free",
+  "defaultModel": "nvidia/nemotron-3.5-lightning:free",
   "defaultThinkingLevel": "medium",
   "theme": "termux-neon",
   "packages": [
-    "../../../../tmp/piolium.tgz"
+    "../../../../tmp/piolium.tgz",
+    "npm:pi-tps-status"
   ],
   "enabledModels": [
     "openrouter/poolside/laguna-s-2.1:free",
