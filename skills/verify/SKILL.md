@@ -27,6 +27,8 @@ Essa frase não é fraqueza — é o que separa um relatório confiável de um c
 | Shell script | `bash -n` (sintaxe) + execute num diretório descartável |
 | Skill/prompt/doc | leia como se fosse o leitor-alvo; cheque exemplos executando-os |
 | Bug fix | **reproduza o bug antes** do fix (deve falhar) e depois (deve passar) |
+| Mudança cross-ambiente | se o projeto roda em Termux **e** Linux: teste no ambiente-alvo. Se não puder testar em um deles, diga: "verifiquei em Termux, não verifiquei em Linux porque X". |
+| Mudança com dependências | `npm ls` (Node) / `pip check` (Python) para conflitos; `npm audit` / `pip audit` para CVEs. Se adicionou/removou dep, confirme que instala limpo. |
 
 ## Processo
 

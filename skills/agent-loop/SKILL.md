@@ -14,7 +14,8 @@ mudanças grandes sem validação e se perder.
 
 1. **Uma mudança pequena por vez.** Se a próxima mudança não cabe numa frase, quebre-a.
 2. **Valide a cada iteração**, não só no fim: rode o teste mais específico do que acabou
-   de mudar; a suíte completa fica para o fim de cada bloco.
+   de mudar; a suíte completa fica para o fim de cada bloco. Antes de declarar pronto,
+   use a skill `verify` — exercer o fluxo real é diferente de "os testes passam".
 3. **Registre o progresso** em `task_list` quando houver mais de 2 passos — marque `done`
    imediatamente, não em lote.
 4. **Se a validação quebrar**, conserte antes de empilhar a próxima mudança (se precisar
@@ -31,6 +32,20 @@ Pare e peça confirmação se:
 - os testes indicarem falha não relacionada
 - encontrar segredo/token em arquivo
 - houver ambiguidade que possa causar perda de trabalho
+
+## Exemplo
+
+Tarefa: adicionar exportação CSV a uma API Node.
+
+```
+Iter 1: adicionar rota /export no Express (validar: curl retorna 200 vazio)
+Iter 2: gerar CSV do array de dados (validar: curl retorna CSV com header)
+Iter 3: adicionar content-type text/csv (validar: Content-Type no curl -I)
+Iter 4: tratar array vazio (validar: curl com DB vazio retorna só header, não erro)
+```
+
+Cada iteração = uma frase, uma validação. Se a iter 2 quebrasse, trocaria para
+`debug-loop` antes de continuar.
 
 ## Ao terminar
 
