@@ -236,7 +236,8 @@ export default function (pi: ExtensionAPI) {
     const content = readPlan();
     pi.sendUserMessage(
       `Reabrindo plano salvo em ${planFileRel}. O conteúdo atual está abaixo — revise, amplie ou ajuste e mantenha os passos numerados. ` +
-        `Não edite outros arquivos. Quando estiver pronto, chame exit_plan para aprovar/implementar.\n\n---\n${content}`,
+      `Não edite outros arquivos. Quando estiver pronto, chame exit_plan para aprovar/implementar.\n\n---\n${content}`,
+      { deliverAs: "followUp" },
     );
   }
 
@@ -334,6 +335,7 @@ export default function (pi: ExtensionAPI) {
     pi.sendUserMessage(
       `Plano aprovado. Implemente em passos pequenos, marcando cada tarefa com task_list (done). ` +
         `${count > 0 ? `Foram criadas ${count} tarefas a partir do plano.` : ""} Rode validações quando possível.${extraText}`,
+      { deliverAs: "followUp" },
     );
   }
 
@@ -361,7 +363,7 @@ export default function (pi: ExtensionAPI) {
       const msg = exists
         ? `Modo plano ativo. Já existe um plano em ${planFileRel} — revise e atualize-o (mantenha os passos numerados). ${base}`
         : `Modo plano ativo. Analise o projeto e crie um plano para: ${objective}\n\n${base}`;
-      pi.sendUserMessage(msg);
+      pi.sendUserMessage(msg, { deliverAs: "followUp" });
     },
   });
 

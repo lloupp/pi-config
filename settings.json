@@ -1,11 +1,17 @@
 {
-  "lastChangelogVersion": "0.80.3",
+  "lastChangelogVersion": "0.84.1",
   "defaultProvider": "openrouter",
-  "defaultModel": "tencent/hy3:free",
+  "defaultModel": "poolside/laguna-xs-2.1:free",
   "defaultThinkingLevel": "medium",
   "theme": "termux-neon",
   "packages": [
-    "npm:@juicesharp/rpiv-ask-user-question",
-    "npm:@vigolium/piolium"
+    "../../../../tmp/piolium.tgz"
+  ],
+  "enabledModels": [
+    "openrouter/poolside/laguna-s-2.1:free",
+    "openrouter/cohere/north-mini-code:free",
+    "openrouter/poolside/laguna-xs-2.1:free",
+    "openrouter/inclusionai/ling-3.0-tiny:free",
+    "openrouter/nvidia/nemotron-3.5-lightning:free"
   ]
 }
