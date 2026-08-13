@@ -90,6 +90,8 @@ Use automaticamente quando combinarem com a tarefa, ou sugira ao usuário:
 - `mcp-attach`: **plugar um servidor MCP pronto** — mcp.json com backup, segredos via env, /mcp start e teste.
 - `mcp-create`: **criar um servidor MCP do zero** (Node sem dependências, template testado, validação via pipe).
 - `api-to-mcp`: **transformar uma API/site em MCP** — descobrir contrato (OpenAPI/docs), mapear endpoints em tools, gerar e acoplar.
+- `excel-charts`: **criar/editar planilhas Excel (.xlsx)** com openpyxl — dados, fórmulas, formatação e gráficos (barra, pizza, linha, dispersão, área, radar, doughnut) embutidos na planilha. Para relatórios/dashboards interativos, use `powerbi`.
+- `powerbi`: **Power BI** — preparar dados para datasets, escrever DAX e Power Query (M), automatizar via REST API (refresh, push data, embed tokens) e configurar embed de relatórios. Para gráficos embutidos em Excel, use `excel-charts`.
 
 ## Segurança
 Tenha cuidado especial com comandos destrutivos ou globais:
