@@ -38,16 +38,64 @@ Antes de reportar um bug:
 Na dúvida entre dois níveis, use o menor — severidade inflada também é falso positivo.
 
 ## Procurar por
-- bugs lógicos (limites de loop, off-by-one, condições invertidas, null/undefined)
-- falhas de segurança (injeção, segredos expostos, validação de input ausente)
-- tratamento de erros ausente ou que engole a causa
-- problemas de concorrência/estado
-- incompatibilidades de ambiente (Termux vs Linux, versões)
-- testes faltando nos caminhos de erro
+
+### Bugs lógicos
+- limites de loop, off-by-one, condições invertidas
+- null/undefined/None sem tratamento
+- estados impossíveis (enum/machine sem transition guard)
+
+### Segurança (checklist por categoria)
+
+| Categoria | O que procurar |
+|---|---|
+| **Injeção** | SQL concatenado (não parameterizado), command injection (exec/spawn com input), template injection |
+| **Segredos expostos** | API keys/senhas hardcoded ou em config commitado, tokens em logs, `.env` sem `.gitignore` |
+| **Validação de input** | input de usuário sem sanitize, path traversal (`../`), SSRF (URL de input sem allowlist) |
+| **Auth/session** | compare de senha com `==` em vez de hash seguro, session token previsível, JWT sem verify de signature |
+| **XSS** (web) | innerHTML com input de usuário, render de template sem escape, DOM XSS via `document.write` |
+| **CSRF** (web) | POST sem CSRF token, mutation via GET, SameSite cookie ausente |
+| **Path traversal** (CLI) | `fs.readFile(req.body.path)`, `path.join` sem sanitização de `../`, `open(user_input)` |
+| **ReDoS** (regex) | regex catastroficamente retroativa em input de usuário (ex.: `(a+)+` em string longa) |
+| **Deps vulneráveis** | `npm audit` / `pip audit` com CVEs não corrigidos, versões desatualizadas com exploits conhecidos |
+| **Denial of service** | sem rate limit em endpoint público, parsing de JSON sem limite de tamanho, regex em input sem timeout |
+
+### Concorrência/estado
+- race condition (read-modify-write sem lock/atomic)
+- deadlock (mutex em ordem inconsistente)
+- estado compartilhado sem sincronização
+
+### Tratamento de erros
+- catch que engole a causa (`catch {}` ou `except: pass`)
+- erro logado sem stack/contexto
+- promise sem `.catch()` / async sem try-catch
+
+### Ambiente
+- incompatibilidades Termux vs Linux (binários glibc, /tmp, sudo)
+- versões de runtime (API deprecada, flag removida)
+
+### Testes
+- caminhos de erro sem teste
+- mocks que não testam nada real (stub retorna valor fixo, assertion trivial)
 
 ## Saída recomendada
 - Resumo curto (1-3 linhas: está seguro para usar/mergear?)
 - Achados por severidade, cada um com `arquivo:linha` e o cenário concreto de falha
+- **Não-achados**: áreas revisadas que não tiveram problemas (ex.: "revisei autenticação — sem_issues"; "deps auditadas — sem CVEs críticos"). Isso é informação útil e evita a pergunta "você chegou a olhar X?".
 - Suspeitas a confirmar (separadas)
 - Sugestões de patch
 - Comandos para validar
+
+## Quando usar auditoria dedicada (`@vigolium/piolium`)
+
+A skills `code-review` cobre revisão manual. Para auditoria multi-fase automatizada
+(varredura de deps, análise de fluxo de dados, fuzzing de input), o pacote
+`@vigolium/piolium` complementa com subagents especializados:
+
+- **code-review** = revisão de PR/diff por um humano (você, o agente) — rapidos e contextual.
+- **piolium** = auditoria sistemática de segurança — multi-fase, retomável, com contexto isolado.
+
+Sugira `piolium` quando:
+- o usuário pedir "auditoria de segurança" (não só "revisão");
+- o projeto lida com dados sensíveis (auth, pagamentos, PII);
+- `code-review` encontrar muitos achados de segurança e quiser validação automatizada;
+- antes de um release/tag importante.
