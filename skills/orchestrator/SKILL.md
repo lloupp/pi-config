@@ -7,22 +7,30 @@ compatibility: Termux/Android ou Linux; requer rede e a extensão subagent com s
 # Orchestrator
 
 Consulte um modelo muito mais forte que o padrão como conselheiro. Sempre via tool
-`subagent` com `provider: openrouter`.
+`subagent`.
 
-### Modelos free confirmados (verificado em 2026-08-13 via API OpenRouter)
+### Modelos disponíveis (verificado em 2026-08-13)
 
-| Modelo | Contexto | Uso |
-|---|---|---|
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | 1M | **Padrão** — 550B, o mais forte disponível free |
-| `nvidia/nemotron-3.5-lightning:free` | 1M | Alternativa — Nemotron 3.5, mais rápido |
-| `nvidia/nemotron-3-super-120b-a12b:free` | 262K | Fallback — 120B, mais leve |
+| Prioridade | Modelo | Provider | Contexto | Notas |
+|---|---|---|---|---|
+| **1ª (se Alvus ativo)** | `z-ai/glm-5.2` | `nvidia` | 1M | Mais forte disponível — reasoning, 1M contexto. Via Alvus (proxy local NVIDIA NIM) |
+| **2ª (free, qualquer máquina)** | `nvidia/nemotron-3-ultra-550b-a55b:free` | `openrouter` | 1M | 550B, free, mais forte do tier free |
+| **3ª (free, fallback leve)** | `nvidia/nemotron-3.5-lightning:free` | `openrouter` | 1M | Nemotron 3.5, mais rápido |
+| **4ª (free, último recurso)** | `nvidia/nemotron-3-super-120b-a12b:free` | `openrouter` | 262K | 120B, mais leve |
 
-Use o **ultra** como padrão. Se rate limit ou falha, caia para **lightning**; se persistir,
-caia para **super-120b**. Todos são free e via OpenRouter.
+### Como escolher o provider
 
-**IDs de modelo free mudam** — confira com `curl -sS https://openrouter.ai/api/v1/models |
-python3 -c "import sys,json; [print(m['id']) for m in json.load(sys.stdin)['data'] if ':free' in m['id']]"`
-antes de atualizar esta skill.
+- **Se o Alvus estiver rodando** (`curl -sS http://127.0.0.1:3000/health` retorna ok):
+  use `provider: nvidia`, `model: z-ai/glm-5.2` — é o modelo mais forte e você já tem o pool de chaves.
+- **Senão** (ou em máquina sem Alvus): use `provider: openrouter` com `nvidia/nemotron-3-ultra-550b-a55b:free`.
+
+### Modelos free do OpenRouter mudam
+
+Confira IDs antes de atualizar esta skill:
+```bash
+curl -sS https://openrouter.ai/api/v1/models | python3 -c \
+  "import sys,json; [print(m['id']) for m in json.load(sys.stdin)['data'] if ':free' in m['id']]"
+```
 
 **Regra de ouro**: o modelo aconselha; quem decide, edita e responde ao usuário é você. Nunca
 cole a resposta dele sem avaliar.
@@ -74,11 +82,12 @@ Após ~2 tentativas falhas no mesmo problema:
 
 ## Falhas e rate limit
 
-O tier free tem rate limit. Se a chamada falhar:
+Se a chamada falhar:
 1. **Retry** com o mesmo modelo (pode ser transitório).
-2. Se falhar de novo, **caia para o próximo modelo** da tabela acima (lightning → super-120b).
-3. Se todos falharem, **siga sozinho** — a skill é aceleração, não dependência.
-4. Registre em `error_lessons` para não insistir na mesma sessão.
+2. Se havia Alvus e falhou, **caia para OpenRouter free** (nemotron-3-ultra:free).
+3. Se OpenRouter free falhar, **caia para o próximo**: lightning → super-120b.
+4. Se todos falharem, **siga sozinho** — a skill é aceleração, não dependência.
+5. Registre em `error_lessons` para não insistir na mesma sessão.
 
 ## Anti-padrões
 
