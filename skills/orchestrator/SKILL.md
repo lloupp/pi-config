@@ -6,12 +6,26 @@ compatibility: Termux/Android ou Linux; requer rede e a extensão subagent com s
 
 # Orchestrator
 
-Consulte o **Nemotron 3 Ultra free** — um modelo 550B muito mais forte que o padrão — como conselheiro. Sempre via tool `subagent` com:
+Consulte um modelo muito mais forte que o padrão como conselheiro. Sempre via tool
+`subagent` com `provider: openrouter`.
 
-- `provider`: `openrouter`
-- `model`: `nvidia/nemotron-3-ultra-550b-a55b:free`
+### Modelos free confirmados (verificado em 2026-08-13 via API OpenRouter)
 
-**Regra de ouro**: o Nemotron aconselha; quem decide, edita e responde ao usuário é você. Nunca cole a resposta dele sem avaliar.
+| Modelo | Contexto | Uso |
+|---|---|---|
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 1M | **Padrão** — 550B, o mais forte disponível free |
+| `nvidia/nemotron-3.5-lightning:free` | 1M | Alternativa — Nemotron 3.5, mais rápido |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 262K | Fallback — 120B, mais leve |
+
+Use o **ultra** como padrão. Se rate limit ou falha, caia para **lightning**; se persistir,
+caia para **super-120b**. Todos são free e via OpenRouter.
+
+**IDs de modelo free mudam** — confira com `curl -sS https://openrouter.ai/api/v1/models |
+python3 -c "import sys,json; [print(m['id']) for m in json.load(sys.stdin)['data'] if ':free' in m['id']]"`
+antes de atualizar esta skill.
+
+**Regra de ouro**: o modelo aconselha; quem decide, edita e responde ao usuário é você. Nunca
+cole a resposta dele sem avaliar.
 
 ## Quando usar
 
@@ -61,8 +75,10 @@ Após ~2 tentativas falhas no mesmo problema:
 ## Falhas e rate limit
 
 O tier free tem rate limit. Se a chamada falhar:
-- 1 retry (o erro pode ser transitório);
-- se falhar de novo, **siga sozinho** — a skill é aceleração, não dependência — e registre em `error_lessons` para não insistir na mesma sessão.
+1. **Retry** com o mesmo modelo (pode ser transitório).
+2. Se falhar de novo, **caia para o próximo modelo** da tabela acima (lightning → super-120b).
+3. Se todos falharem, **siga sozinho** — a skill é aceleração, não dependência.
+4. Registre em `error_lessons` para não insistir na mesma sessão.
 
 ## Anti-padrões
 

@@ -41,11 +41,18 @@ Regras do debate:
 
 Para decisões difíceis de reverter (arquitetura, formato de dados, API pública) e com rede disponível, escale o debate: cada posição vira um modelo free diferente via tool `subagent` (`provider="openrouter"`), para opiniões genuinamente independentes:
 
-- **Advogado** → `model="qwen/qwen3-coder:free"` (ou `nvidia/nemotron-3-super-120b-a12b:free`)
-- **Cético** → `model="openai/gpt-oss-120b:free"` (ou `qwen/qwen3-next-80b-a3b-instruct:free`)
-- **Pragmático** → você mesmo, o agente principal — é quem conhece o ambiente real.
+### Modelos free confirmados (verificado em 2026-08-13 via API OpenRouter)
 
-<!-- IDs confirmados na API pública do OpenRouter (2026-07-11). -->
+| Posição | Modelo | Contexto |
+|---|---|---|
+| **Advogado** | `nvidia/nemotron-3-super-120b-a12b:free` | 262K |
+| **Cético** | `openai/gpt-oss-20b:free` | 131K |
+| **Pragmático** | você mesmo, o agente principal | — |
+
+> `qwen/qwen3-coder:free`, `openai/gpt-oss-120b:free` e `qwen/qwen3-next-80b-a3b-instruct:free`
+> não existem mais no OpenRouter free tier (confirmado 2026-08-13). Os IDs acima foram verificados.
+> IDs free mudam — confira com `curl -sS https://openrouter.ai/api/v1/models | python3 -c
+> "import sys,json; [print(m['id']) for m in json.load(sys.stdin)['data'] if ':free' in m['id']]"`.
 
 Regras:
 - prompt autocontido por posição: a decisão em uma frase, os critérios do passo 1, os fatos coletados e o papel a assumir ("defenda X com o melhor caso" / "ataque X, aponte riscos");
@@ -53,8 +60,10 @@ Regras:
 - o debate interno continua sendo o **padrão** — multi-modelo só quando a decisão justificar o custo;
 - se um modelo falhar (rate limit do tier free), caia para o debate interno na posição faltante — não trave a decisão.
 
-### 3. Rodada de réplica
+### 3. Rodada de réplica (máximo 2)
+
 - O Advogado responde às melhores objeções do Cético.
+- **Máximo 2 rodadas de réplica** — mais que isso é análise paralisante.
 - Se uma objeção não tiver resposta boa, isso é sinal — não a esconda.
 
 ### 4. Julgar
@@ -81,6 +90,35 @@ Réplica: ...
 Julgamento:
 - <critério>: <opção vencedora e por quê>
 Escolha: <opção> — trade-off aceito: <qual>
+```
+
+## Exemplo
+
+Decisão: "Escolher entre SQLite e LowDB para um projeto de notas pessoais"
+
+Critérios: simplicidade, persistência entre sessões, query flexibility, ecossistema.
+
+```
+Advogado (SQLite): banco maduro, SQL permite JOINs/índices, sem dependências
+nativas (melhor-sqlite3 compila com build-essential), funciona em qualquer lugar.
+
+Cético (LowDB): SQLite é overkill para um arquivo de notas. JSON lido/escrito
+direto é 3 linhas de código, zero build, mais fácil de debugar a olho.
+
+Pragmático: em Termux, melhor-sqlite3 exige build-essential e pode falhar em
+ARM; LowDB é JSON puro. Mas LowDB lê o arquivo inteiro a cada operação — não
+escala. Veredito depende do volume.
+
+Réplica: o projeto é notas pessoais (<1000 entries), não um SaaS. LowDB resolve
+com menos código. Se crescer, migração para SQLite é trivial.
+
+Julgamento:
+- simplicidade: LowDB vence (JSON direto vs compilação)
+- persistência: empate (ambos persistem)
+- query: SQLite vence (SQL > JS filter)
+- ecossistema: SQLite vence (migrar é fácil, LowDB é nicho)
+
+Escolha: LowDB — trade-off: sem queries SQL, mas adequado ao volume do projeto.
 ```
 
 ## Anti-padrões
