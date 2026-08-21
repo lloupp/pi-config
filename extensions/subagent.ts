@@ -158,9 +158,11 @@ export default function (pi: ExtensionAPI) {
       if (model) args.push("--model", String(model));
       if (thinking) args.push("--thinking", String(thinking));
 
-      // O corpo do markdown vira preâmbulo da tarefa: é a forma de dar ao subagente as
-      // instruções do tipo sem depender de uma flag de system prompt no CLI.
-      args.push(agent.prompt ? `${agent.prompt}\n\n---\n\n${task}` : task);
+      // O corpo do markdown é o prompt de sistema do tipo, como nos subagents do Claude
+      // Code. `--append-system-prompt` e não `--system-prompt`: substituir apagaria o
+      // prompt de coding assistant do pi, que é o que ensina o subagente a usar as tools.
+      if (agent.prompt) args.push("--append-system-prompt", agent.prompt);
+      args.push(task);
 
       const result = await pi.exec("pi", args, {
         signal,

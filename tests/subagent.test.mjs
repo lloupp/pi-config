@@ -105,14 +105,21 @@ test("o tipo define ferramentas, modelo e thinking no argv", async () => {
   assert.equal(args[args.indexOf("--thinking") + 1], "high");
 });
 
-test("o corpo do markdown vira preâmbulo da tarefa", async () => {
+test("o corpo do markdown vira prompt de sistema do subagente", async () => {
   const { ext, chamadas } = await comExecCapturado();
 
   await ext.tools.subagent.execute("id", { task: "revise o parser", subagent_type: "revisor" }, null, null, makeCtx());
 
-  const tarefa = chamadas[0].args.at(-1);
-  assert.match(tarefa, /Procure defeitos de correção/, "as instruções do tipo precisam chegar ao subagente");
-  assert.match(tarefa, /revise o parser$/);
+  const { args } = chamadas[0];
+  // --append e não --system-prompt: substituir apagaria o prompt que ensina a usar as tools.
+  assert.match(args[args.indexOf("--append-system-prompt") + 1], /Procure defeitos de correção/);
+  assert.equal(args.at(-1), "revise o parser", "a tarefa continua sendo o último argumento");
+});
+
+test("tipo sem corpo não passa prompt de sistema", async () => {
+  const { ext, chamadas } = await comExecCapturado();
+  await ext.tools.subagent.execute("id", { task: "x", subagent_type: "explore" }, null, null, makeCtx());
+  assert.equal(chamadas[0].args.includes("--append-system-prompt"), false);
 });
 
 test("params explícitos sobrepõem o que o tipo define", async () => {

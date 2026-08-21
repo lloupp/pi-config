@@ -33,12 +33,20 @@ echo "Instalando Pi config de $SRC_DIR em $DEST_DIR"
 mkdir -p "$DEST_DIR"
 
 for item in "${ITEMS[@]}"; do
-  if [[ -e "$SRC_DIR/$item" ]]; then
-    cp -r "$SRC_DIR/$item" "$DEST_DIR/"
-    echo "  ✓ $item"
-  else
+  if [[ ! -e "$SRC_DIR/$item" ]]; then
     echo "  - $item não encontrado em $SRC_DIR; pulando." >&2
+    continue
   fi
+
+  # Diretórios são espelhados, não mesclados: `cp -r` sozinho nunca apaga, então uma
+  # extensão ou skill removida do repo continuaria instalada e rodando lado a lado com a
+  # que a substituiu. Foi o que aconteceu quando o safety-guard virou permissions.
+  if [[ -d "$SRC_DIR/$item" ]]; then
+    rm -rf "${DEST_DIR:?}/$item"
+  fi
+
+  cp -r "$SRC_DIR/$item" "$DEST_DIR/"
+  echo "  ✓ $item"
 done
 
 echo "Pronto. Reinicie o Pi ou use /reload-pi para aplicar."
