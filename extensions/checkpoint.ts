@@ -9,7 +9,10 @@ interface Snapshot {
   path: string;
   absPath: string;
   existedBefore: boolean;
-  content: string | null;
+  /** Buffer, não string: ler/gravar como utf8 corromperia qualquer arquivo não-UTF8. */
+  content: Buffer | null;
+  /** Arquivo grande demais para guardar: fica registrado, mas não dá para desfazer. */
+  tooLarge: boolean;
   toolName: string;
   timestamp: string;
 }
@@ -30,7 +33,8 @@ export function formatSnapshots(list: Snapshot[], limit = 15): string {
     .map((s) => {
       const time = s.timestamp.slice(11, 19);
       const kind = s.existedBefore ? "editado" : "criado";
-      return `#${s.id} ${time} ${s.path} (${kind} via ${s.toolName})`;
+      const note = s.tooLarge ? " — grande demais, sem undo" : "";
+      return `#${s.id} ${time} ${s.path} (${kind} via ${s.toolName})${note}`;
     })
     .join("\n");
 }
@@ -49,10 +53,13 @@ export default function (pi: ExtensionAPI) {
     // Snapshot é melhor-esforço: qualquer falha aqui nunca deve bloquear a edição.
     try {
       const existedBefore = existsSync(absPath);
-      let content: string | null = null;
+      let content: Buffer | null = null;
+      let tooLarge = false;
       if (existedBefore) {
-        if (statSync(absPath).size > maxFileBytes) return undefined;
-        content = await readFile(absPath, "utf8");
+        // Arquivo grande demais ainda vira checkpoint (sem conteúdo): assim /checkpoints
+        // mostra que aquela edição não tem undo, em vez de o usuário só descobrir na hora.
+        tooLarge = statSync(absPath).size > maxFileBytes;
+        if (!tooLarge) content = await readFile(absPath);
       }
       snapshots = pushSnapshot(snapshots, {
         id: nextId++,
@@ -60,6 +67,7 @@ export default function (pi: ExtensionAPI) {
         absPath,
         existedBefore,
         content,
+        tooLarge,
         toolName: event.toolName,
         timestamp: new Date().toISOString(),
       });
@@ -96,6 +104,14 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
+      if (entry.tooLarge) {
+        ctx.ui.notify(
+          `Checkpoint #${entry.id} (${entry.path}) não tem conteúdo guardado: o arquivo passava de ${Math.round(maxFileBytes / 1000)} KB no momento da edição. Não é possível desfazer por aqui.`,
+          "warning",
+        );
+        return;
+      }
+
       const action = entry.existedBefore
         ? `restaurar ${entry.path} para o estado de ${entry.timestamp.slice(11, 19)}`
         : `apagar ${entry.path} (não existia antes da edição)`;
@@ -111,7 +127,8 @@ export default function (pi: ExtensionAPI) {
       try {
         if (entry.existedBefore) {
           await mkdir(dirname(entry.absPath), { recursive: true });
-          await writeFile(entry.absPath, entry.content ?? "", "utf8");
+          // Sem encoding: grava os bytes originais de volta, byte a byte.
+          await writeFile(entry.absPath, entry.content ?? Buffer.alloc(0));
         } else if (existsSync(entry.absPath)) {
           await unlink(entry.absPath);
         }

@@ -17,7 +17,7 @@ function formatDuration(ms: number): string {
 export default function (pi: ExtensionAPI) {
   let enabled = true;
   let thresholdMs = defaultThresholdMs;
-  let turnStartedAt: number | undefined;
+  let taskStartedAt: number | undefined;
   // undefined = ainda não detectado; null = nenhum notificador disponível.
   let notifier: "termux" | "notify-send" | null | undefined;
 
@@ -41,15 +41,21 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  pi.on("turn_start", async () => {
-    turnStartedAt = Date.now();
+  // O marco é o início da tarefa, não do turno: agent_start pode disparar de novo
+  // dentro do mesmo run (retry, compactação, continuação enfileirada), então só a
+  // primeira marcação vale. Medir por turn_start mediria apenas o último turno e
+  // uma tarefa longa feita de turnos curtos nunca cruzaria o limiar.
+  pi.on("agent_start", async () => {
+    if (taskStartedAt === undefined) taskStartedAt = Date.now();
   });
 
-  pi.on("agent_end", async () => {
-    if (!enabled || turnStartedAt === undefined) return;
-    const duration = Date.now() - turnStartedAt;
-    turnStartedAt = undefined;
-    if (duration < thresholdMs) return;
+  // agent_settled (e não agent_end) é o fim de verdade: garante uma notificação por
+  // tarefa mesmo quando houve retry ou compactação no meio.
+  pi.on("agent_settled", async () => {
+    if (taskStartedAt === undefined) return;
+    const duration = Date.now() - taskStartedAt;
+    taskStartedAt = undefined;
+    if (!enabled || duration < thresholdMs) return;
     // Melhor-esforço: falha na notificação nunca vira erro da sessão.
     await notify(duration).catch(() => {});
   });

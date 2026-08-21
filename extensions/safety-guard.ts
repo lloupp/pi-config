@@ -31,11 +31,29 @@ const infraPathPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /(^|\/)node_modules(?:\/|$)/i, label: "node_modules" },
 ];
 
+const confirmTimeoutMs = 300_000;
+
+// Os dialogs são serializados: handlers de tool_call rodam concorrentemente com os tool
+// calls do batch, e dois confirms simultâneos disputam o slot único da TUI — o primeiro
+// nunca resolve e o turno trava. Ferramentas contornam isso com executionMode:"sequential",
+// que não existe para handlers de evento, então a fila é feita aqui.
+let dialogChain: Promise<unknown> = Promise.resolve();
+function queueDialog<T>(fn: () => Promise<T>): Promise<T> {
+  const run = dialogChain.then(fn, fn);
+  dialogChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function confirmOrBlock(ctx: any, title: string, body: string) {
   if (!ctx.hasUI) return { block: true, reason: `${title}: bloqueado sem UI para confirmação` };
 
-  const ok = await ctx.ui.confirm(title, body);
-  if (!ok) return { block: true, reason: "Bloqueado pelo usuário" };
+  // O timeout evita a sessão travada para sempre quando ninguém está olhando. Expirar
+  // bloqueia o comando (fail-safe) — situação recuperável, já que o agente pode tentar de novo.
+  const ok = await queueDialog(() => ctx.ui.confirm(title, body, { timeout: confirmTimeoutMs }));
+  if (!ok) return { block: true, reason: "Bloqueado pelo usuário (ou confirmação expirada)" };
   return undefined;
 }
 

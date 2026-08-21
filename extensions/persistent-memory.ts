@@ -101,7 +101,7 @@ export default function (pi: ExtensionAPI) {
       text: Type.Optional(Type.String({ description: "Texto da memória para add" })),
       query: Type.Optional(Type.String({ description: "Consulta para search" })),
       id: Type.Optional(Type.Number({ description: "ID para forget" })),
-      scope: Type.Optional(Type.String({ description: "Escopo: global ou repo. Padrão: repo" })),
+      scope: Type.Optional(Type.String({ description: "Escopo: global, repo ou all. Padrão: repo (ao buscar, all traz memórias de todos os projetos)" })),
       tags: Type.Optional(Type.String({ description: "Tags separadas por vírgula" })),
       limit: Type.Optional(Type.Number({ description: "Limite de resultados" })),
     }),
@@ -151,8 +151,12 @@ export default function (pi: ExtensionAPI) {
 
       const store = await loadStore();
       let items = store.items;
-      if (scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === currentRepo);
-      else if (params.scope === "global") items = items.filter((item) => item.scope === "global");
+      // Padrão "repo": memórias de projeto raramente fazem sentido fora dele. Quem quiser
+      // varrer tudo pede scope=all explicitamente.
+      if (params.scope !== "all") {
+        if (scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === currentRepo);
+        else items = items.filter((item) => item.scope === "global");
+      }
 
       if (action === "search") {
         const query = String(params.query ?? "").trim();

@@ -106,7 +106,7 @@ export default function (pi: ExtensionAPI) {
       lesson: Type.Optional(Type.String({ description: "Como evitar/resolver da próxima vez (para add)" })),
       query: Type.Optional(Type.String({ description: "Consulta para search" })),
       id: Type.Optional(Type.Number({ description: "ID para forget" })),
-      scope: Type.Optional(Type.String({ description: "Escopo: global ou repo. Padrão: repo" })),
+      scope: Type.Optional(Type.String({ description: "Escopo: global, repo ou all. Ao registrar, padrão repo; ao buscar/listar, padrão all — uma lição aprendida num projeto costuma valer nos outros" })),
       tags: Type.Optional(Type.String({ description: "Tags separadas por vírgula" })),
       limit: Type.Optional(Type.Number({ description: "Limite de resultados" })),
     }),
@@ -158,6 +158,9 @@ export default function (pi: ExtensionAPI) {
 
       const store = await loadStore();
       let items = store.items;
+      // Busca varre todos os escopos por padrão (ao contrário de persistent_memory): um erro
+      // de ferramenta aprendido num projeto costuma se repetir nos outros. Filtrar exige
+      // scope explícito.
       if (params.scope === "global") items = items.filter((item) => item.scope === "global");
       else if (params.scope === "repo") items = items.filter((item) => item.scope === "repo" && item.repoKey === cwd);
 

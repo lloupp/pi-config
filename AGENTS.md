@@ -48,8 +48,9 @@ Use ou sugira `/plan` quando:
 - o usuário pedir análise antes de implementação.
 
 Durante modo plano:
-- não edite arquivos;
-- use apenas leitura, busca e comandos investigativos;
+- a única escrita permitida é o arquivo de plano em `.pi/plans/`; qualquer outra é bloqueada;
+- bash é liberado, mas só para investigar — nada de instalar pacotes, mudar configuração ou commitar;
+- `subagent` apenas em `mode=explore`;
 - termine com plano numerado, riscos e validações.
 
 Após aprovação do usuário, use `/implement` ou implemente o plano em passos pequenos.

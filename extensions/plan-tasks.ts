@@ -19,28 +19,14 @@ interface TaskDetails {
 
 const readonlyTools = ["read", "grep", "find", "ls", "project_snapshot"];
 
-// Comandos de leitura permitidos no modo plano (primeiro token).
-const planBashAllowlist = new Set([
-  "pwd", "ls", "find", "fd", "rg", "grep", "git", "npm", "node", "python", "python3",
-  "pip", "cat", "head", "tail", "wc", "du", "df", "jq", "sed", "awk", "tree", "stat",
-  "file", "which", "env",
-]);
-
-// Valida o comando INTEIRO (não por prefixo): sem encadeamento/redirecionamento/subshell,
-// primeiro token no allowlist, e sem flags destrutivas mesmo em comandos "de leitura".
-// Fecha o furo em que `pwd; rm -rf ~` ou `ls && curl|sh` passavam pelo filtro antigo.
-function isSafePlanBash(cmd: string): boolean {
-  const c = cmd.trim();
-  if (!c) return false;
-  if (/[;&|`$(){}<>\\]/.test(c) || /\n/.test(c)) return false; // metacaracteres de shell
-  const first = c.split(/\s+/)[0];
-  if (!planBashAllowlist.has(first)) return false;
-  if (first === "find" && /\s-(delete|exec|execdir|ok|okdir|fprint|fprintf|fls)\b/.test(c)) return false;
-  if ((first === "sed" || first === "awk") && /\s-i\b|\s-i\S/.test(c)) return false;
-  if (first === "git" && !/^git\s+(status|diff|log|show|branch|ls-files|rev-parse|remote|blame|describe|shortlog|tag)\b/.test(c)) return false;
-  if (first === "npm" && !/^npm\s+(test|run|ls|list|view|outdated|why)\b/.test(c)) return false;
-  return true;
-}
+// Bash NÃO é filtrado por allowlist no modo plano — mesmo modelo do plan mode do Claude
+// Code: bloqueia-se a escrita de arquivos e confia-se na instrução do prompt somada ao
+// safety-guard, que já intercepta comandos destrutivos.
+//
+// A allowlist anterior falhava nas duas direções: deixava passar execução de código
+// arbitrário (`npm run <script>`, `node arquivo.js`, `pip install`) enquanto barrava
+// investigação legítima, já que qualquer pipe caía no filtro de metacaracteres — nem
+// `git log --oneline | head -5` passava.
 
 type GateChoice = "approve" | "edit" | "reject";
 const gateOptions: { label: string; value: GateChoice }[] = [
@@ -436,11 +422,15 @@ export default function (pi: ExtensionAPI) {
         customType: "plan-mode-context",
         content:
           `[MODO PLANO ATIVO]\n` +
-          `- Não edite nem escreva arquivos, EXCETO o arquivo de plano: ${planFileRel}.\n` +
-          `- Use leitura, busca e git status/diff para entender o contexto.\n` +
-          `- Bash deve ser apenas investigativo; subagent apenas em mode=explore.\n` +
+          `O usuário quer um plano antes de qualquer execução. Você NÃO DEVE fazer edições, ` +
+          `rodar comandos que alterem o sistema (incluindo mudar configurações, instalar pacotes, ` +
+          `criar commits) nem realizar qualquer outra mudança até o plano ser aprovado.\n` +
+          `- A ÚNICA escrita permitida é o arquivo de plano: ${planFileRel}. Toda outra escrita é bloqueada.\n` +
+          `- Bash é permitido, mas apenas para investigar: leitura, busca, git status/diff/log. ` +
+          `Não use bash para contornar o bloqueio de escrita.\n` +
+          `- subagent apenas em mode=explore.\n` +
           `- Escreva no arquivo de plano: objetivo, passos NUMERADOS, riscos e comandos de validação.\n` +
-          `- Quando o plano estiver pronto, chame a ferramenta exit_plan para pedir aprovação. Não altere outros arquivos até ser aprovado.`,
+          `- Quando o plano estiver pronto, chame a ferramenta exit_plan para pedir aprovação.`,
         display: false,
       },
     };
@@ -465,13 +455,6 @@ export default function (pi: ExtensionAPI) {
       const mode = String((event.input as any).mode ?? "explore");
       if (mode === "full") {
         return { block: true, reason: "Modo plano ativo: subagent em mode=full bloqueado (pode editar). Use mode=explore." };
-      }
-    }
-
-    if (event.toolName === "bash") {
-      const command = String((event.input as any).command ?? "").trim();
-      if (!isSafePlanBash(command)) {
-        return { block: true, reason: `Modo plano ativo: bash não permitido (só leitura, sem encadeamento): ${command}` };
       }
     }
 

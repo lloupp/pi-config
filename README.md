@@ -17,14 +17,16 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json e frontmatter de SKILL.md); erro volta direto para o agente corrigir; `/autocheck on|off`
   - `subagent` — ferramenta `subagent`: delega tarefas a um `pi -p` com contexto isolado (modo explore somente leitura ou full); aceita `provider`/`model`/`thinking` para rodar com um modelo alternativo (base das skills `orchestrator` e do debate multi-modelo do `self-debate`)
   - `mcp` — cliente MCP (Model Context Protocol) via stdio, sem dependências; lê `mcp.json` e registra cada tool do servidor como `mcp_<servidor>_<tool>`; `/mcp start` liga todos (ou `/mcp start <servidor>` liga um), `/mcp stop` desliga, `/mcp` mostra status, `/mcp reload` reconecta
-  - `plan-tasks` — modo plano estilo Claude Code e gestão de tarefas: `/plan <objetivo>` bloqueia escrita (exceto o próprio arquivo de plano, gravado em `.pi/plans/<slug>.md`), restringe bash ao investigativo e subagent a `mode=explore`; o agente escreve o plano no arquivo e chama a ferramenta `exit_plan` (equivalente ao ExitPlanMode) que exibe o plano num painel **rolável** (↑↓ rolam, PgUp/PgDn/g/G saltam, ←→ trocam a opção, Enter confirma, 1-3 escolhem direto, Esc rejeita) com gate **Aprovar/Editar/Rejeitar** (a tool roda em modo sequencial para o dialog não conflitar com outras tools do mesmo turno) — ao aprovar, libera a escrita e semeia o `task_list` a partir dos passos numerados; `/implement` aprova manualmente, `/tasks` lista, `Ctrl+Shift+P` alterna o modo; `/plans` lista os planos salvos e `/open-plan <slug>` reabre um existente — os planos persistem em `.pi/plans/` e sobrevivem a retomada de sessão (o estado do plano ativo é restaurado ao resumir)
+  - `plan-tasks` — modo plano estilo Claude Code e gestão de tarefas: `/plan <objetivo>` bloqueia escrita (exceto o próprio arquivo de plano, gravado em `.pi/plans/<slug>.md`) e restringe subagent a `mode=explore`; bash fica liberado para investigar, como no plan mode do Claude Code — a garantia é o bloqueio de escrita mais a instrução do prompt e o `safety-guard`, não uma allowlist de comandos; o agente escreve o plano no arquivo e chama a ferramenta `exit_plan` (equivalente ao ExitPlanMode) que exibe o plano num painel **rolável** (↑↓ rolam, PgUp/PgDn/g/G saltam, ←→ trocam a opção, Enter confirma, 1-3 escolhem direto, Esc rejeita) com gate **Aprovar/Editar/Rejeitar** (a tool roda em modo sequencial para o dialog não conflitar com outras tools do mesmo turno) — ao aprovar, libera a escrita e semeia o `task_list` a partir dos passos numerados; `/implement` aprova manualmente, `/tasks` lista, `Ctrl+Shift+P` alterna o modo; `/plans` lista os planos salvos e `/open-plan <slug>` reabre um existente — os planos persistem em `.pi/plans/` e sobrevivem a retomada de sessão (o estado do plano ativo é restaurado ao resumir)
   - `safety-guard` — proteção contra comandos perigosos (`rm -rf`, `git reset --hard`, `push --force`, `curl | sh`…) e contra escrita em caminhos protegidos (`.git/`, `node_modules/`); também confirma **leitura** de arquivos sensíveis (`.env`, `.ssh/`, `auth.json`, `credentials.json`, `*.pem`, `id_rsa`), inclusive tentativas de lê-los via bash (`cat`/`grep`/`less`)
   - `termux-tools` — comandos e ferramentas para Termux
   - `pi-status` — status no footer
   - `update-pi` — comando `/update-pi`: git pull no repo `~/pi-config`, reinstala em `~/.pi/agent` e recarrega numa tacada só; ao iniciar o Pi, verifica em segundo plano se há commits novos no remoto e avisa quando é hora de rodar `/update-pi`; e `/sync-pi` faz o caminho inverso — copia `~/.pi/agent` para o repo, commita e faz push (com rebase antes, para não conflitar com outra máquina)
   - `notify-done` — notificação do sistema (termux-notification no Android, notify-send no Linux) quando um turno do agente demora mais que o limiar (90s); `/notify on|off|<segundos>` ajusta
 - `themes/` — tema customizado `termux-neon`
+- `tests/` — testes das extensões (runner nativo do Node, sem dependências)
 - `install-pi-config.sh` — script de instalação
+- `run-tests.sh` — roda a suíte de testes
 
 ## Pacotes da comunidade
 
@@ -51,6 +53,26 @@ bash install-pi-config.sh --project    # instala no projeto atual (.pi/agent)
 
 Somente os itens de configuração (`AGENTS.md`, `settings.json`, `prompts/`, `skills/`,
 `extensions/`, `themes/`) são copiados. Depois, reinicie o Pi ou use `/reload-pi`.
+
+## Testes
+
+```bash
+bash run-tests.sh
+```
+
+Usa só o runner nativo do Node (`node:test`) — nada para instalar. Os testes carregam cada
+extensão com o mesmo `jiti` e os mesmos `virtualModules` que o Pi usa, então exercitam o
+código de verdade: handlers de evento, comandos e ferramentas são chamados diretamente,
+com um `pi` simulado.
+
+Cobrem o carregamento de todas as extensões (pega erro de sintaxe e import quebrado, que
+em uso normal só apareceriam como uma extensão silenciosamente ausente) e o comportamento
+de `checkpoint`, `web-tools`, `mcp`, `plan-tasks`, `safety-guard`, `notify-done` e dos dois
+stores de memória. Os que tocam disco usam diretórios temporários e um `HOME` isolado —
+a memória real em `~/.pi/agent/memory` nunca é lida nem escrita.
+
+Se o pacote do Pi não for encontrado automaticamente, aponte o caminho:
+`PI_PACKAGE_DIR=/caminho/do/pacote bash run-tests.sh`.
 
 ## Como atualizar este backup a partir do ambiente atual
 

@@ -283,21 +283,47 @@ function loadConfigs(cwd: string): Record<string, ServerConfig> {
   return merged;
 }
 
-/** Converte o content de um resultado MCP para o formato de content do Pi. */
-function convertContent(result: any): { content: any[]; isError: boolean } {
+/**
+ * Converte o content de um resultado MCP para o formato de content do Pi.
+ *
+ * O teto de MAX_RESULT_CHARS é do resultado INTEIRO, não de cada item: aplicado por
+ * item, um resultado com dezenas de blocos de texto entregaria megabytes ao contexto.
+ */
+export function convertContent(result: any): { content: any[]; isError: boolean } {
   const out: any[] = [];
+  let budget = MAX_RESULT_CHARS;
+  let omittedItems = 0;
+
+  function pushText(text: string): void {
+    if (budget <= 0) {
+      omittedItems++;
+      return;
+    }
+    if (text.length > budget) {
+      out.push({ type: "text", text: `${text.slice(0, budget)}\n[... truncado: ${text.length - budget} caracteres omitidos]` });
+      budget = 0;
+      return;
+    }
+    out.push({ type: "text", text });
+    budget -= text.length;
+  }
+
   for (const item of result?.content ?? []) {
     if (item?.type === "text" && typeof item.text === "string") {
-      out.push({ type: "text", text: truncate(item.text) });
+      pushText(item.text);
     } else if (item?.type === "image" && typeof item.data === "string") {
+      // Imagens não consomem o orçamento de texto: são anexadas como blocos próprios.
       out.push({ type: "image", data: item.data, mimeType: item.mimeType ?? "image/png" });
     } else if (item?.type === "resource" && item.resource) {
       const r = item.resource;
-      const text = typeof r.text === "string" ? r.text : `[recurso binário: ${r.uri ?? "sem uri"}]`;
-      out.push({ type: "text", text: truncate(text) });
+      pushText(typeof r.text === "string" ? r.text : `[recurso binário: ${r.uri ?? "sem uri"}]`);
     } else if (item) {
-      out.push({ type: "text", text: truncate(JSON.stringify(item)) });
+      pushText(JSON.stringify(item));
     }
+  }
+
+  if (omittedItems > 0) {
+    out.push({ type: "text", text: `[... ${omittedItems} bloco(s) de conteúdo omitido(s): limite de ${MAX_RESULT_CHARS} caracteres do resultado atingido]` });
   }
   if (out.length === 0) out.push({ type: "text", text: "(resultado vazio)" });
   return { content: out, isError: result?.isError === true };

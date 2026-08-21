@@ -1,11 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { Type } from "typebox";
-
-async function commandOutput(pi: ExtensionAPI, command: string, args: string[], timeout = 5000) {
-  const result = await pi.exec(command, args, { timeout });
-  const out = [result.stdout?.trim(), result.stderr?.trim()].filter(Boolean).join("\n");
-  return out || `(exit ${result.code})`;
-}
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("envcheck", {
@@ -75,9 +71,10 @@ export default function (pi: ExtensionAPI) {
       const fd = await pi.exec("sh", ["-lc", `if command -v fd >/dev/null 2>&1; then fd --type f --max-depth 3 | head -${maxFiles}; else find . -maxdepth 3 -type f | sed 's#^./##' | head -${maxFiles}; fi`], { signal, timeout: 8000 });
       parts.push("\n## arquivos", fd.stdout.trim() || "(nenhum arquivo listado)");
 
+      // existsSync no lugar de um `sh -lc test -f` por arquivo: elimina cinco subprocessos
+      // e o quoting de shell montado com JSON.stringify, que não é escape de shell.
       for (const file of ["package.json", "pyproject.toml", "Cargo.toml", "README.md", "AGENTS.md"]) {
-        const out = await commandOutput(pi, "sh", ["-lc", `test -f ${JSON.stringify(file)} && echo encontrado || true`], 3000);
-        if (out === "encontrado") parts.push(`\n## marcador\n${file} encontrado`);
+        if (existsSync(join(ctx.cwd, file))) parts.push(`\n## marcador\n${file} encontrado`);
       }
 
       return {

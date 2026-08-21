@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -63,6 +64,19 @@ export default function (pi: ExtensionAPI) {
         newCommits = `commits novos:\n${log.stdout.trim()}`;
       }
 
+      // O instalador acabou de chegar do remoto: rodá-lo é executar código não revisado.
+      // Confirma mostrando o que veio no pull, para o usuário decidir com contexto.
+      if (ctx.hasUI) {
+        const ok = await ctx.ui.confirm(
+          "Rodar o instalador do pi-config?",
+          `Vai executar install-pi-config.sh de ${repo}, script que acabou de vir do remoto, e sobrescrever ~/.pi/agent.\n\n${newCommits}\n\nContinuar?`,
+        );
+        if (!ok) {
+          ctx.ui.notify("Instalação cancelada. O git pull já foi aplicado ao repo.", "info");
+          return;
+        }
+      }
+
       const install = await pi.exec("bash", [path.join(repo, "install-pi-config.sh"), "--global", repo], { timeout: installTimeoutMs });
       if (install.code !== 0) {
         ctx.ui.notify(`Instalação falhou:\n${(install.stderr || install.stdout).trim()}`, "error");
@@ -96,7 +110,10 @@ export default function (pi: ExtensionAPI) {
 
       for (const item of items) {
         const src = path.join(agentDir, item);
-        const copy = await pi.exec("sh", ["-c", `test -e ${JSON.stringify(src)} && cp -r ${JSON.stringify(src)} ${JSON.stringify(repo + "/")} || true`], { timeout: installTimeoutMs });
+        if (!fs.existsSync(src)) continue;
+        // cp direto por argv, sem `sh -c`: escape JSON não neutraliza $, crase ou aspas
+        // dentro do shell, e estes caminhos vêm de os.homedir().
+        const copy = await pi.exec("cp", ["-r", src, repo], { timeout: installTimeoutMs });
         if (copy.code !== 0) {
           ctx.ui.notify(`Falha copiando ${item}:\n${(copy.stderr || "").trim()}`, "error");
           return;

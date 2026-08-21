@@ -75,9 +75,14 @@ function htmlToText(html: string): string {
 }
 
 const maxBodyBytes = 5_000_000;
+const searchTimeoutMs = 15_000;
+const fetchTimeoutMs = 20_000;
+const commandPreviewChars = 2000;
 
 // Lê o corpo com teto de bytes, abortando o stream — evita OOM com respostas enormes
 // (ou Content-Length mentiroso). Fallback para res.text() se não houver stream.
+// O abort do fetch propaga para este reader (o body erra com AbortError), então o
+// timeout de fetchText cobre também esta leitura.
 async function readCapped(res: Response, maxBytes = maxBodyBytes): Promise<string> {
   if (!res.body) return await res.text();
   const reader = res.body.getReader();
@@ -108,10 +113,22 @@ async function readCapped(res: Response, maxBytes = maxBodyBytes): Promise<strin
   return new TextDecoder("utf-8", { fatal: false }).decode(buf);
 }
 
+interface FetchedPage {
+  text: string;
+  status: number;
+  ok: boolean;
+  url: string;
+  contentType: string;
+}
+
+// Busca E lê o corpo sob o MESMO timer: limpar o timeout assim que os headers chegam
+// deixaria um servidor que goteja bytes segurar a tool até o teto de maxBodyBytes —
+// na prática, indefinidamente.
+//
 // Redirects são seguidos manualmente para revalidar cada destino: com redirect
 // automático, uma página externa poderia redirecionar para localhost/rede interna
 // e escapar do bloqueio de hosts (SSRF).
-async function fetchWithTimeout(url: URL, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
+async function fetchText(url: URL, timeoutMs: number, signal?: AbortSignal): Promise<FetchedPage> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onOuterAbort = () => controller.abort();
@@ -124,10 +141,18 @@ async function fetchWithTimeout(url: URL, timeoutMs: number, signal?: AbortSigna
         redirect: "manual",
         headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5" },
       });
-      if (res.status < 300 || res.status >= 400) return res;
-      const location = res.headers.get("location");
-      if (!location) return res;
-      current = validateUrl(new URL(location, current).toString());
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (location) {
+        current = validateUrl(new URL(location, current).toString());
+        continue;
+      }
+      return {
+        text: await readCapped(res),
+        status: res.status,
+        ok: res.ok,
+        url: res.url || current.toString(),
+        contentType: res.headers.get("content-type") ?? "",
+      };
     }
     throw new Error(`Redirects demais (máx. 5) a partir de ${url}`);
   } finally {
@@ -142,15 +167,23 @@ interface SearchResult {
   snippet: string;
 }
 
-function parseDuckDuckGo(html: string, limit: number): SearchResult[] {
-  const results: SearchResult[] = [];
+export function parseDuckDuckGo(html: string, limit: number): SearchResult[] {
   const linkRe = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
   const snippetRe = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
-  const snippets: string[] = [];
-  for (let m = snippetRe.exec(html); m; m = snippetRe.exec(html)) snippets.push(htmlToText(m[1]));
 
-  for (let m = linkRe.exec(html); m && results.length < limit; m = linkRe.exec(html)) {
-    let target = m[1];
+  const links: { index: number; href: string; title: string }[] = [];
+  for (let m = linkRe.exec(html); m; m = linkRe.exec(html)) {
+    links.push({ index: m.index, href: m[1], title: htmlToText(m[2]) });
+  }
+  const snippets: { index: number; text: string }[] = [];
+  for (let m = snippetRe.exec(html); m; m = snippetRe.exec(html)) {
+    snippets.push({ index: m.index, text: htmlToText(m[1]) });
+  }
+
+  const results: SearchResult[] = [];
+  for (let i = 0; i < links.length && results.length < limit; i++) {
+    const link = links[i];
+    let target = link.href;
     // DDG envolve resultados em //duckduckgo.com/l/?uddg=<url-codificada>
     if (target.includes("duckduckgo.com/l/")) {
       try {
@@ -160,13 +193,21 @@ function parseDuckDuckGo(html: string, limit: number): SearchResult[] {
         // mantém o link original
       }
     }
-    results.push({
-      title: htmlToText(m[2]),
-      url: target,
-      snippet: snippets[results.length] ?? "",
-    });
+    // O snippet é casado por POSIÇÃO (fica entre este link e o próximo), não por
+    // contador: um resultado sem snippet — anúncio, resultado especial — deslocaria
+    // todos os seguintes, que passariam a descrever a URL errada.
+    const nextIndex = links[i + 1]?.index ?? Number.POSITIVE_INFINITY;
+    const snippet = snippets.find((s) => s.index > link.index && s.index < nextIndex);
+    results.push({ title: link.title, url: target, snippet: snippet?.text ?? "" });
   }
   return results;
+}
+
+// O DDG responde 200 com uma página de bloqueio/CAPTCHA quando acha o tráfego anômalo.
+// Sem detectar isso, o parser não casa nada e a tool reporta "nenhum resultado", que
+// leva o modelo a concluir que o assunto não existe em vez de tentar de novo depois.
+function looksBlocked(html: string): boolean {
+  return /anomaly|unusual traffic|captcha|blocked|are you a robot/i.test(html);
 }
 
 export default function (pi: ExtensionAPI) {
@@ -190,11 +231,16 @@ export default function (pi: ExtensionAPI) {
       const limit = Math.max(1, Math.min(Number(params.limit ?? 6), 15));
 
       const url = new URL(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-      const res = await fetchWithTimeout(url, 15000, signal);
-      if (!res.ok) throw new Error(`Busca falhou: HTTP ${res.status}`);
+      const page = await fetchText(url, searchTimeoutMs, signal);
+      if (!page.ok) throw new Error(`Busca falhou: HTTP ${page.status}`);
 
-      const results = parseDuckDuckGo(await readCapped(res), limit);
+      const results = parseDuckDuckGo(page.text, limit);
       if (results.length === 0) {
+        if (looksBlocked(page.text)) {
+          throw new Error(
+            "DuckDuckGo bloqueou a busca (rate limit ou CAPTCHA), não é ausência de resultados. Espere alguns minutos ou use web_fetch numa fonte direta.",
+          );
+        }
         return { content: [{ type: "text", text: `Nenhum resultado para: ${query}` }], details: { query, results } };
       }
 
@@ -228,20 +274,18 @@ export default function (pi: ExtensionAPI) {
       const url = validateUrl(String(params.url ?? ""));
       const maxChars = Math.max(500, Math.min(Number(params.maxChars ?? 8000), 50000));
 
-      const res = await fetchWithTimeout(url, 20000, signal);
-      if (!res.ok) throw new Error(`HTTP ${res.status} ao buscar ${url}`);
+      const page = await fetchText(url, fetchTimeoutMs, signal);
+      if (!page.ok) throw new Error(`HTTP ${page.status} ao buscar ${url}`);
 
-      const contentType = res.headers.get("content-type") ?? "";
-      const body = await readCapped(res);
-      const isHtml = contentType.includes("html") || /^\s*<(!doctype|html)/i.test(body);
-      let text = params.raw ? body : isHtml ? htmlToText(body) : body;
+      const isHtml = page.contentType.includes("html") || /^\s*<(!doctype|html)/i.test(page.text);
+      let text = params.raw ? page.text : isHtml ? htmlToText(page.text) : page.text;
 
       const truncated = text.length > maxChars;
       if (truncated) text = text.slice(0, maxChars) + "\n\n[…truncado]";
 
       return {
-        content: [{ type: "text", text: `${untrustedNote}\n\nFonte: ${res.url}\nTipo: ${contentType || "desconhecido"}\n\n${text}` }],
-        details: { url: res.url, contentType, truncated, chars: text.length },
+        content: [{ type: "text", text: `${untrustedNote}\n\nFonte: ${page.url}\nTipo: ${page.contentType || "desconhecido"}\n\n${text}` }],
+        details: { url: page.url, contentType: page.contentType, truncated, chars: text.length },
       };
     },
   });
@@ -256,9 +300,9 @@ export default function (pi: ExtensionAPI) {
       }
       try {
         const url = validateUrl(raw);
-        const res = await fetchWithTimeout(url, 20000);
-        const text = htmlToText(await readCapped(res)).slice(0, 2000);
-        ctx.ui.notify(`HTTP ${res.status} ${res.url}\n\n${text}`, res.ok ? "info" : "warning");
+        const page = await fetchText(url, fetchTimeoutMs);
+        const text = htmlToText(page.text).slice(0, commandPreviewChars);
+        ctx.ui.notify(`HTTP ${page.status} ${page.url}\n\n${text}`, page.ok ? "info" : "warning");
       } catch (error) {
         ctx.ui.notify(`Erro: ${error instanceof Error ? error.message : String(error)}`, "error");
       }
