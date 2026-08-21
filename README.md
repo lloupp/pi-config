@@ -14,7 +14,7 @@ Configuração personalizada do Pi Coding Agent para uso em Termux/Android.
   - `persistent-memory` — memória persistente entre sessões
   - `error-lessons` — lições aprendidas com erros, injetadas nas próximas sessões
   - `web-tools` — ferramentas `web_search` e `web_fetch` para navegar na internet
-  - `checkpoint` — snapshot automático antes de cada edição do agente; `/undo` e `/checkpoints` para reverter
+  - `checkpoint` — snapshot automático antes de cada edição do agente, agrupado por turno. `/rewind` volta ao estado anterior a um pedido seu, escolhendo entre **código**, **conversa** (via fork da sessão) ou **ambos**, como no Claude Code — o seletor lista os turnos pela sua própria mensagem. `/undo` desfaz uma única edição e `/checkpoints` lista tudo. Arquivos acima de 1 MB entram na lista marcados como "sem undo", em vez de sumirem em silêncio. Não há equivalente ao `Esc Esc`: no pi o `escape` é o atalho de interromper, e a API não expõe duplo-toque
   - `auto-check` — verificação de sintaxe automática após cada edição (js, py, sh, json e frontmatter de SKILL.md); erro volta direto para o agente corrigir; `/autocheck on|off`
   - `subagent` — ferramenta `subagent`: delega tarefas a um `pi -p` com contexto isolado (modo explore somente leitura ou full); aceita `provider`/`model`/`thinking` para rodar com um modelo alternativo (base das skills `orchestrator` e do debate multi-modelo do `self-debate`)
   - `mcp` — cliente MCP (Model Context Protocol) via stdio, sem dependências; lê `mcp.json` e registra cada tool do servidor como `mcp_<servidor>_<tool>`; `/mcp start` liga todos (ou `/mcp start <servidor>` liga um), `/mcp stop` desliga, `/mcp` mostra status, `/mcp reload` reconecta
