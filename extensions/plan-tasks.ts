@@ -297,7 +297,9 @@ export default function (pi: ExtensionAPI) {
 
   function updatePlanUi(ctx: ExtensionContext) {
     if (!ctx?.hasUI) return;
-    const { fg } = ctx.ui.theme;
+    // Ligado ao theme, não desestruturado: fg usa `this` internamente e um `const { fg }`
+    // estoura com "Cannot read properties of undefined (reading 'fgColors')".
+    const fg = (color: string, text: string) => ctx.ui.theme.fg(color as any, text);
 
     if (planMode) {
       ctx.ui.setStatus("plan-tasks", fg("warning", "📋 plan"));
@@ -344,7 +346,9 @@ export default function (pi: ExtensionAPI) {
     const slug = slugify(objective ?? "") || "plano";
     planFilePath = resolve(ctx.cwd, ".pi", "plans", `${slug}.md`);
     planFileRel = relative(ctx.cwd, planFilePath) || `${slug}.md`;
-    mkdirSync(dirname(planFilePath), { recursive: true });
+    // Sem mkdir aqui: agora que o modo plano entra pelo Shift+Tab, criar o diretório na
+    // ativação deixaria um .pi/plans/ vazio em todo projeto onde alguém ciclasse os modos.
+    // writePlan já cria sob demanda.
     pi.setActiveTools(planTools());
     updatePlanUi(ctx);
     persistPlanState(ctx);

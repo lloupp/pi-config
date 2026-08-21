@@ -25,6 +25,38 @@ test("/plan pede o modo plano ao sistema de permissões", async () => {
   assert.deepEqual(pedidos, ["plano"]);
 });
 
+test("entrar em modo plano com UI real não quebra ao pintar o widget", async () => {
+  // Regressão: updatePlanUi desestruturava ctx.ui.theme, e fg usa `this` — pressionar
+  // Shift+Tab para o modo plano estourava com "Cannot read properties of undefined
+  // (reading 'fgColors')" a cada evento permissions:mode.
+  const cwd = mkdtempSync(join(tmpdir(), "pi-plan-"));
+  const status = [];
+  const widgets = [];
+  const ctx = makeCtx({
+    cwd,
+    ui: { setStatus: (_k, v) => status.push(v), setWidget: (_k, v) => widgets.push(v) },
+  });
+  const ext3 = await loadExtension("plan-tasks.ts");
+  await ext3.events.session_start({}, ctx);
+
+  ext3.bus.emit("permissions:mode", { mode: "plano" });
+
+  assert.ok(status.some((s) => typeof s === "string" && s.includes("plan")), "o rodapé precisa marcar o modo plano");
+  assert.ok(widgets.at(-1)?.join("\n").includes("Modo plano ativo"));
+});
+
+test("a lista de tarefas também é pintada sem desligar do theme", async () => {
+  const ctx = makeCtx({ ui: { setWidget: () => {}, setStatus: () => {} } });
+  const ext4 = await loadExtension("plan-tasks.ts");
+  await ext4.tools.task_list.execute(
+    "id",
+    { todos: [{ content: "A", activeForm: "Fazendo A", status: "in_progress" }] },
+    null,
+    null,
+    ctx,
+  );
+});
+
 test("sair do modo plano pelo ciclo desativa o bloqueio de escrita", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "pi-plan-"));
   const ctx = makeCtx({ cwd });

@@ -147,7 +147,24 @@ export function makeUi(overrides = {}) {
     input: async () => null,
     editor: async () => null,
     custom: async () => null,
-    theme: { fg: (_color, text) => text, bg: (_color, text) => text, bold: (text) => text },
+    // O theme real usa `this` nesses métodos, então desestruturá-los (`const { fg } = theme`)
+    // estoura em produção. Aqui eles dependem de `this` de propósito, para que um uso
+    // desligado do objeto falhe no teste em vez de só no terminal do usuário.
+    theme: {
+      palette: true,
+      fg(_color, text) {
+        if (!this?.palette) throw new TypeError("theme.fg chamado sem o theme (desestruturado?)");
+        return text;
+      },
+      bg(_color, text) {
+        if (!this?.palette) throw new TypeError("theme.bg chamado sem o theme (desestruturado?)");
+        return text;
+      },
+      bold(text) {
+        if (!this?.palette) throw new TypeError("theme.bold chamado sem o theme (desestruturado?)");
+        return text;
+      },
+    },
     ...overrides,
   };
 }
