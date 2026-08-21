@@ -96,7 +96,7 @@ export default function (pi: ExtensionAPI) {
       const repo = (args ?? "").trim() || path.join(os.homedir(), "pi-config");
       const agentDir = path.join(os.homedir(), ".pi", "agent");
       // Mesma lista de itens de configuração do install-pi-config.sh.
-      const items = ["AGENTS.md", "settings.json", "mcp.json", "prompts", "skills", "extensions", "themes"];
+      const items = ["AGENTS.md", "settings.json", "mcp.json", "keybindings.json", "prompts", "skills", "extensions", "themes"];
 
       const status = await pi.exec("git", ["-C", repo, "status", "--porcelain"], { timeout: gitTimeoutMs });
       if (status.code !== 0) {

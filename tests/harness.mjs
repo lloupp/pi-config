@@ -67,16 +67,38 @@ export function importExtension(fileName) {
 }
 
 /**
- * Carrega a extensão e executa seu default export com um `pi` simulado, devolvendo o que
- * ela registrou: handlers de evento, comandos, tools e providers.
+ * EventBus equivalente ao pi.events. É o único canal de comunicação entre extensões: o
+ * loader do pi cria um jiti por extensão com moduleCache:false, então um módulo importado
+ * por duas delas vira duas instâncias, e não um singleton.
  */
-export async function loadExtension(fileName) {
-  const registered = { events: {}, commands: {}, tools: {}, providers: [], activeTools: [] };
+export function createBus() {
+  const handlers = new Map();
+  return {
+    emit(channel, data) {
+      for (const handler of handlers.get(channel) ?? []) handler(data);
+    },
+    on(channel, handler) {
+      const list = handlers.get(channel) ?? [];
+      list.push(handler);
+      handlers.set(channel, list);
+      return () => handlers.set(channel, (handlers.get(channel) ?? []).filter((h) => h !== handler));
+    },
+  };
+}
+
+/**
+ * Carrega a extensão e executa seu default export com um `pi` simulado, devolvendo o que
+ * ela registrou: handlers de evento, comandos, tools, atalhos e providers.
+ *
+ * Passe o mesmo `bus` para duas extensões quando o teste for sobre a conversa entre elas.
+ */
+export async function loadExtension(fileName, { bus = createBus() } = {}) {
+  const registered = { events: {}, commands: {}, tools: {}, shortcuts: {}, providers: [], activeTools: [], bus };
   const pi = new Proxy(
     {},
     {
       get(_target, prop) {
-        if (prop === "events") return new Proxy({}, { get: () => () => [] });
+        if (prop === "events") return bus;
         return (...args) => {
           switch (prop) {
             case "on":
@@ -87,6 +109,9 @@ export async function loadExtension(fileName) {
               break;
             case "registerTool":
               registered.tools[args[0].name] = args[0];
+              break;
+            case "registerShortcut":
+              registered.shortcuts[args[0]] = args[1].handler;
               break;
             case "registerProvider":
               registered.providers.push(args[0]?.name ?? args[0]);
@@ -127,12 +152,21 @@ export function makeUi(overrides = {}) {
 
 /** Contexto de extensão mínimo. */
 export function makeCtx(overrides = {}) {
-  const { ui, ...rest } = overrides;
+  const { ui, sessionManager, ...rest } = overrides;
   return {
     cwd: repoRoot,
     hasUI: true,
     mode: "tui",
     ui: makeUi(ui),
+    // Sessão vazia: basta para os handlers que só varrem entradas anteriores.
+    sessionManager: {
+      getEntries: () => [],
+      getBranch: () => [],
+      getEntry: () => undefined,
+      getLeafId: () => undefined,
+      getCwd: () => repoRoot,
+      ...sessionManager,
+    },
     ...rest,
   };
 }

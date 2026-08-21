@@ -28,11 +28,14 @@ const readonlyTools = ["read", "grep", "find", "ls", "project_snapshot"];
 // investigação legítima, já que qualquer pipe caía no filtro de metacaracteres — nem
 // `git log --oneline | head -5` passava.
 
-type GateChoice = "approve" | "edit" | "reject";
+// As opções do ExitPlanMode do Claude Code: aprovar escolhe em que modo de permissão a
+// sessão continua. "Editar plano" não existe lá, mas é útil e não conflita — fica no fim.
+type GateChoice = "approve-auto" | "approve-manual" | "edit" | "reject";
 const gateOptions: { label: string; value: GateChoice }[] = [
-  { label: "Aprovar e implementar", value: "approve" },
+  { label: "Sim, e aceitar edições automaticamente", value: "approve-auto" },
+  { label: "Sim, aprovar cada edição", value: "approve-manual" },
+  { label: "Não, continuar planejando", value: "reject" },
   { label: "Editar plano", value: "edit" },
-  { label: "Rejeitar e continuar planejando", value: "reject" },
 ];
 
 // Gate de aprovação com o plano rolável (padrão do question.ts oficial): o título do
@@ -44,7 +47,7 @@ async function planGate(ctx: ExtensionContext, plan: string, fileRel: string): P
     // Sem TUI completa (ex.: RPC): cai no select simples com preview truncado.
     const lines = plan.split(/\r?\n/);
     const preview = lines.length > 40 ? lines.slice(0, 40).join("\n") + `\n… (íntegra em ${fileRel})` : plan;
-    const choice = await ctx.ui.select(`Plano proposto (${fileRel}):\n\n${preview}\n\nO que fazer?`, gateOptions.map((o) => o.label));
+    const choice = await ctx.ui.select(`Plano proposto (${fileRel}):\n\n${preview}\n\nPronto para implementar?`, gateOptions.map((o) => o.label));
     return gateOptions.find((o) => o.label === choice)?.value ?? "reject";
   }
 
@@ -143,6 +146,7 @@ export default function (pi: ExtensionAPI) {
   let nextId = 1;
   let planFilePath: string | undefined; // absoluto — único caminho gravável no modo plano
   let planFileRel = ".pi/plans/plano.md"; // para mensagens legíveis
+  let lastCtx: ExtensionContext | undefined; // handlers do barramento não recebem ctx
 
   function readPlan() {
     if (planFilePath && existsSync(planFilePath)) return readFileSync(planFilePath, "utf8");
@@ -279,6 +283,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function enablePlan(ctx: ExtensionContext, objective?: string) {
+    if (planMode && !objective) return; // já ativo: nada a refazer (evita perder o plano aberto)
     if (!planMode) activeBeforePlan = pi.getActiveTools();
     planMode = true;
     const slug = slugify(objective ?? "") || "plano";
@@ -292,6 +297,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   function disablePlan(ctx: ExtensionContext) {
+    if (!planMode) return;
     planMode = false;
     if (activeBeforePlan) pi.setActiveTools(activeBeforePlan);
     activeBeforePlan = undefined;
@@ -299,15 +305,34 @@ export default function (pi: ExtensionAPI) {
     persistPlanState(ctx);
   }
 
+  /**
+   * O modo plano é um dos modos de permissão (permissions.ts), como no Claude Code. Quem
+   * manda no estado é aquela extensão: aqui só se pede a troca e se reage ao anúncio.
+   * A comunicação é pelo pi.events porque o loader cria um jiti por extensão, então um
+   * módulo compartilhado viraria duas instâncias em vez de um singleton.
+   */
+  function requestMode(mode: "plano" | "perguntar" | "aceitar-edicoes") {
+    pi.events.emit("permissions:set-mode", { mode });
+  }
+
+  pi.events.on("permissions:mode", (data: any) => {
+    const ctx = lastCtx;
+    if (!ctx) return;
+    if (data?.mode === "plano") enablePlan(ctx);
+    else disablePlan(ctx);
+  });
+
   // Aprova o plano: libera escrita, semeia tarefas a partir do arquivo. Retorna nº de tarefas.
-  function approve(ctx: ExtensionContext) {
+  function approve(ctx: ExtensionContext, nextMode: "perguntar" | "aceitar-edicoes" = "perguntar") {
     const count = seedTasksFromPlan(readPlan());
     disablePlan(ctx);
+    requestMode(nextMode);
     if (ctx.hasUI) {
+      const modo = nextMode === "aceitar-edicoes" ? "aceitando edições automaticamente" : "confirmando cada edição";
       ctx.ui.notify(
         count > 0
-          ? `Modo implementação: escrita liberada. ${count} tarefa(s) criadas a partir do plano.`
-          : "Modo implementação: escrita liberada.",
+          ? `Implementando, ${modo}. ${count} tarefa(s) criadas a partir do plano.`
+          : `Implementando, ${modo}.`,
         "info",
       );
     }
@@ -326,11 +351,15 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    lastCtx = ctx;
     reconstructTasks(ctx);
     restorePlanState(ctx);
     updatePlanUi(ctx);
+    // Se a sessão foi retomada em modo plano, o ciclo de permissões precisa concordar.
+    if (planMode) requestMode("plano");
   });
   pi.on("session_tree", async (_event, ctx) => {
+    lastCtx = ctx;
     reconstructTasks(ctx);
     restorePlanState(ctx);
     updatePlanUi(ctx);
@@ -340,7 +369,10 @@ export default function (pi: ExtensionAPI) {
     description: "Ativa modo plano: análise sem escrita, plano gravado em .pi/plans/<slug>.md",
     handler: async (args, ctx) => {
       const objective = args?.trim() || "a tarefa solicitada";
+      lastCtx = ctx;
+      // Sem objetivo e já em modo plano, enablePlan preserva o plano aberto.
       enablePlan(ctx, args?.trim());
+      requestMode("plano");
       const exists = planFilePath && existsSync(planFilePath);
       const base =
         `Escreva/atualize o plano no arquivo ${planFileRel} (é o ÚNICO arquivo que você pode gravar agora). ` +
@@ -403,17 +435,9 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerShortcut("ctrl+shift+p", {
-    description: "Alternar modo plano",
-    handler: async (ctx) => {
-      if (planMode) {
-        disablePlan(ctx);
-        if (ctx.hasUI) ctx.ui.notify("Modo plano desativado.", "info");
-      } else {
-        enablePlan(ctx);
-      }
-    },
-  });
+  // Sem atalho próprio: o modo plano entrou no ciclo do Shift+Tab (permissions.ts). O
+  // ctrl+shift+p anterior nem funcionava em terminal sem protocolo Kitty — o Termux legado
+  // manda o mesmo byte de ctrl+p, que é o ciclo de modelos do Pi.
 
   pi.on("before_agent_start", async () => {
     if (!planMode) return undefined;
@@ -499,13 +523,19 @@ export default function (pi: ExtensionAPI) {
       while (true) {
         const choice = await planGate(ctx, readPlan().trim(), planFileRel);
 
-        if (choice === "approve") {
-          const n = approve(ctx);
+        if (choice === "approve-auto" || choice === "approve-manual") {
+          const nextMode = choice === "approve-auto" ? "aceitar-edicoes" : "perguntar";
+          const n = approve(ctx, nextMode);
           persistPlanState(ctx);
           sendImplementPrompt(n);
           return {
-            content: [{ type: "text", text: `Plano aprovado pelo usuário; escrita liberada, ${n} tarefa(s) criadas.` }],
-            details: undefined,
+            content: [
+              {
+                type: "text",
+                text: `Plano aprovado pelo usuário; escrita liberada em modo "${nextMode}", ${n} tarefa(s) criadas.`,
+              },
+            ],
+            details: { nextMode },
           };
         }
 

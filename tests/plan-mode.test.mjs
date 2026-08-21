@@ -14,6 +14,32 @@ const onToolCall = ext.events.tool_call;
 const projeto = makeCtx({ cwd: mkdtempSync(join(tmpdir(), "pi-plan-")) });
 await ext.commands.plan("melhorar extensoes", projeto);
 
+test("/plan pede o modo plano ao sistema de permissões", async () => {
+  // O modo plano virou um dos modos do ciclo (Shift+Tab); quem manda no estado é o
+  // permissions.ts, e a conversa acontece pelo pi.events.
+  const outro = await loadExtension("plan-tasks.ts");
+  const pedidos = [];
+  outro.bus.on("permissions:set-mode", (data) => pedidos.push(data.mode));
+
+  await outro.commands.plan("objetivo", makeCtx({ cwd: mkdtempSync(join(tmpdir(), "pi-plan-")) }));
+  assert.deepEqual(pedidos, ["plano"]);
+});
+
+test("sair do modo plano pelo ciclo desativa o bloqueio de escrita", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "pi-plan-"));
+  const ctx = makeCtx({ cwd });
+  const ext2 = await loadExtension("plan-tasks.ts");
+  await ext2.events.session_start({}, ctx); // registra o ctx para os handlers do barramento
+
+  ext2.bus.emit("permissions:mode", { mode: "plano" });
+  const bloqueado = await ext2.events.tool_call({ toolName: "write", input: { path: "src/a.ts" } }, ctx);
+  assert.equal(bloqueado?.block, true, "entrar em modo plano pelo ciclo deve bloquear escrita");
+
+  ext2.bus.emit("permissions:mode", { mode: "perguntar" });
+  const liberado = await ext2.events.tool_call({ toolName: "write", input: { path: "src/a.ts" } }, ctx);
+  assert.equal(liberado, undefined, "sair do modo plano deve liberar");
+});
+
 const bash = (command) => onToolCall({ toolName: "bash", input: { command } }, projeto);
 
 test("bash com pipe é permitido", async () => {

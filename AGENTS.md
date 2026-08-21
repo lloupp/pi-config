@@ -39,8 +39,18 @@ Para tarefas de código ou configuração:
 4. **Validar**: rode testes, lint, typecheck, build ou comando mínimo relevante quando existir.
 5. **Resumir**: diga o que mudou, arquivos alterados, validação feita e próximos passos.
 
+## Modos de permissão
+**Shift+Tab** cicla `perguntar` → `aceitar edições` → `plano`; o modo atual fica no rodapé.
+Regras `allow`/`ask`/`deny` ficam no `settings.json` sob a chave `permissions`, no formato
+`Bash(git push:*)`, `Edit(src/**)`, `Read(.env)`. Todo pedido de confirmação oferece
+"sempre permitir", que grava a regra. `/permissions` mostra o estado.
+
+Escrita em `.git/`, `node_modules/` e arquivos de segredo é bloqueada e **não** é liberável
+por regra `allow` — só o modo `sem-confirmacao` a permite, e ele exige confirmação para ser
+ativado.
+
 ## Modo plano
-Use ou sugira `/plan` quando:
+É um dos modos acima. Use ou sugira `/plan` quando:
 - a tarefa for grande ou ambígua;
 - envolver vários arquivos;
 - envolver refatoração;
@@ -53,7 +63,8 @@ Durante modo plano:
 - `subagent` apenas em `mode=explore`;
 - termine com plano numerado, riscos e validações.
 
-Após aprovação do usuário, use `/implement` ou implemente o plano em passos pequenos.
+Ao aprovar, o usuário escolhe se as edições seguintes são automáticas ou confirmadas uma a
+uma — a sessão sai do modo plano para o modo escolhido. `/implement` aprova manualmente.
 
 ## Ferramentas customizadas
 - Use `project_snapshot` para entender rapidamente a estrutura de um projeto antes de análise geral.
