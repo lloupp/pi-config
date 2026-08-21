@@ -12,7 +12,6 @@
     "openrouter/poolside/laguna-s-2.1:free",
     "openrouter/cohere/north-mini-code:free",
     "openrouter/poolside/laguna-xs-2.1:free",
-    "openrouter/inclusionai/ling-3.0-tiny:free",
     "openrouter/nvidia/nemotron-3.5-lightning:free"
   ]
 }
