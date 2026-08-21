@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 interface MemoryItem {
@@ -21,7 +21,11 @@ interface MemoryStore {
   items: MemoryItem[];
 }
 
-const memoryDir = join(homedir(), ".pi", "agent", "memory");
+function agentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
+}
+
+const memoryDir = join(agentDir(), "memory");
 const memoryFile = join(memoryDir, "memories.json");
 
 function normalizeTags(value: unknown): string[] {
@@ -189,27 +193,61 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  /**
+   * Grava uma instrução no AGENTS.md, que no pi é o equivalente ao CLAUDE.md: é o arquivo
+   * que o agente lê toda sessão. Diferente do store JSON desta extensão — aquele é a
+   * memória que o agente gerencia, esta é a que o usuário escreve.
+   */
+  async function rememberToAgentsFile(ctx: any, text: string): Promise<void> {
+    if (/(sk-|token|api[_-]?key|password|senha|secret|-----BEGIN)/i.test(text)) {
+      ctx.ui.notify("Possível segredo detectado. Nada foi salvo.", "error");
+      return;
+    }
+
+    const projectFile = join(ctx.cwd, "AGENTS.md");
+    const globalFile = join(agentDir(), "AGENTS.md");
+    const opcoes = [`Este projeto (${projectFile})`, `Todos os projetos (${globalFile})`];
+    const escolha = ctx.hasUI ? await ctx.ui.select("Onde guardar?", [...opcoes, "Cancelar"]) : opcoes[1];
+    if (!escolha || escolha === "Cancelar") return;
+
+    const target = escolha === opcoes[0] ? projectFile : globalFile;
+    try {
+      await mkdir(dirname(target), { recursive: true });
+      const atual = existsSync(target) ? await readFile(target, "utf8") : "";
+      // Acrescenta numa seção própria, para não se misturar com o que já está escrito.
+      const marca = "## Memórias";
+      const linha = `- ${text}`;
+      const novo = atual.includes(marca)
+        ? atual.replace(marca, `${marca}\n${linha}`)
+        : `${atual.trimEnd()}\n\n${marca}\n${linha}\n`;
+      await writeFile(target, novo.startsWith("\n") ? novo.trimStart() : novo, "utf8");
+      if (ctx.hasUI) ctx.ui.notify(`Guardado em ${target}`, "info");
+    } catch (error) {
+      if (ctx.hasUI) ctx.ui.notify(`Não consegui gravar: ${error instanceof Error ? error.message : String(error)}`, "error");
+    }
+  }
+
+  // `#` no início da mensagem grava uma instrução, como no Claude Code — sem gastar um
+  // turno do agente.
+  pi.on("input", async (event, ctx) => {
+    const text = String(event.text ?? "");
+    if (!text.startsWith("#")) return { action: "continue" as const };
+    const conteudo = text.slice(1).trim();
+    if (!conteudo) return { action: "continue" as const };
+
+    await rememberToAgentsFile(ctx, conteudo);
+    return { action: "handled" as const };
+  });
+
   pi.registerCommand("remember", {
-    description: "Salva memória global. Uso: /remember texto",
+    description: "Guarda uma instrução no AGENTS.md do projeto ou global (igual a começar a mensagem com #)",
     handler: async (args, ctx) => {
       const text = args.trim();
       if (!text) {
-        ctx.ui.notify("Uso: /remember texto", "warning");
+        ctx.ui.notify("Uso: /remember texto (ou comece a mensagem com #)", "warning");
         return;
       }
-      if (/(sk-|token|api[_-]?key|password|senha|secret|-----BEGIN)/i.test(text)) {
-        ctx.ui.notify("Possível segredo detectado. Memória não salva.", "error");
-        return;
-      }
-      const id = await withLock(async () => {
-        const store = await loadStore();
-        const now = new Date().toISOString();
-        const item: MemoryItem = { id: store.nextId++, scope: "global", text, tags: [], createdAt: now, updatedAt: now };
-        store.items.push(item);
-        await saveStore(store);
-        return item.id;
-      });
-      ctx.ui.notify(`Memória salva: #${id}`, "info");
+      await rememberToAgentsFile(ctx, text);
     },
   });
 

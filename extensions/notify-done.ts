@@ -1,4 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 // Notifica quando um turno longo do agente termina — útil para largar o
 // telefone/PC durante uma tarefa demorada. A notificação carrega só a duração,
@@ -6,6 +9,29 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const defaultThresholdMs = 90_000;
 const execTimeoutMs = 5000;
+
+function settingsFile(): string {
+  return join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "settings.json");
+}
+
+function readSettings(): Record<string, any> {
+  try {
+    return existsSync(settingsFile()) ? (JSON.parse(readFileSync(settingsFile(), "utf8")) ?? {}) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persiste os ajustes: sem isso eles voltavam ao padrão a cada reload da sessão. */
+function persistNotify(enabled: boolean, thresholdSeconds: number): void {
+  try {
+    const settings = readSettings();
+    settings.notify = { ...(settings.notify ?? {}), enabled, thresholdSeconds };
+    writeFileSync(settingsFile(), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  } catch {
+    // Não poder gravar não impede o ajuste nesta sessão.
+  }
+}
 
 function formatDuration(ms: number): string {
   const totalSec = Math.round(ms / 1000);
@@ -15,8 +41,9 @@ function formatDuration(ms: number): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  let enabled = true;
-  let thresholdMs = defaultThresholdMs;
+  const stored = readSettings().notify ?? {};
+  let enabled = stored.enabled !== false;
+  let thresholdMs = Number(stored.thresholdSeconds) > 0 ? Number(stored.thresholdSeconds) * 1000 : defaultThresholdMs;
   let taskStartedAt: number | undefined;
   // undefined = ainda não detectado; null = nenhum notificador disponível.
   let notifier: "termux" | "notify-send" | null | undefined;
@@ -74,6 +101,7 @@ export default function (pi: ExtensionAPI) {
         return;
       } else enabled = !enabled;
 
+      persistNotify(enabled, Math.round(thresholdMs / 1000));
       const kind = await detectNotifier();
       const via = kind === "termux" ? "termux-notification" : kind === "notify-send" ? "notify-send" : "nenhum notificador disponível";
       ctx.ui.notify(

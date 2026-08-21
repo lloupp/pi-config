@@ -92,13 +92,15 @@ export function createBus() {
  *
  * Passe o mesmo `bus` para duas extensões quando o teste for sobre a conversa entre elas.
  */
-export async function loadExtension(fileName, { bus = createBus() } = {}) {
+export async function loadExtension(fileName, { bus = createBus(), exec } = {}) {
   const registered = { events: {}, commands: {}, tools: {}, shortcuts: {}, providers: [], activeTools: [], bus };
   const pi = new Proxy(
     {},
     {
       get(_target, prop) {
         if (prop === "events") return bus;
+        // Extensões que rodam subprocessos precisam de um exec observável no teste.
+        if (prop === "exec" && exec) return exec;
         return (...args) => {
           switch (prop) {
             case "on":

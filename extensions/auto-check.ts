@@ -1,12 +1,35 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, unlink } from "node:fs/promises";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 const maxFileBytes = 512_000;
 const checkTimeoutMs = 8000;
 const maxErrorChars = 800;
+
+function settingsFile(): string {
+  return join(process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "settings.json");
+}
+
+function readSettings(): Record<string, any> {
+  try {
+    return existsSync(settingsFile()) ? (JSON.parse(readFileSync(settingsFile(), "utf8")) ?? {}) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persiste o toggle: sem isso ele voltava ao padrão a cada reload da sessão. */
+function persistEnabled(enabled: boolean): void {
+  try {
+    const settings = readSettings();
+    settings.autoCheck = { ...(settings.autoCheck ?? {}), enabled };
+    writeFileSync(settingsFile(), `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  } catch {
+    // Não poder gravar não impede o toggle nesta sessão.
+  }
+}
 
 function resolvePath(rawPath: string, cwd: string): string {
   return isAbsolute(rawPath) ? rawPath : join(cwd, rawPath);
@@ -18,7 +41,7 @@ function trimError(text: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  let enabled = true;
+  let enabled = readSettings().autoCheck?.enabled !== false;
 
   async function checkCommand(command: string, args: string[]): Promise<string | undefined> {
     const result = await pi.exec(command, args, { timeout: checkTimeoutMs });
@@ -127,6 +150,7 @@ export default function (pi: ExtensionAPI) {
       if (arg === "on") enabled = true;
       else if (arg === "off") enabled = false;
       else enabled = !enabled;
+      persistEnabled(enabled);
       ctx.ui.notify(`Auto-check: ${enabled ? "ligado" : "desligado"} (js, py, sh, json, SKILL.md)`, "info");
     },
   });

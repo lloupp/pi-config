@@ -60,7 +60,7 @@ ativado.
 Durante modo plano:
 - a única escrita permitida é o arquivo de plano em `.pi/plans/`; qualquer outra é bloqueada;
 - bash é liberado, mas só para investigar — nada de instalar pacotes, mudar configuração ou commitar;
-- `subagent` apenas em `mode=explore`;
+- `subagent` apenas no tipo `explore`;
 - termine com plano numerado, riscos e validações.
 
 Ao aprovar, o usuário escolhe se as edições seguintes são automáticas ou confirmadas uma a
@@ -68,13 +68,14 @@ uma — a sessão sai do modo plano para o modo escolhido. `/implement` aprova m
 
 ## Ferramentas customizadas
 - Use `project_snapshot` para entender rapidamente a estrutura de um projeto antes de análise geral.
+- O usuário pode começar uma mensagem com `#` para guardar uma instrução no `AGENTS.md`; respeite o que estiver na seção `## Memórias`.
 - Use `task_list` para acompanhar progresso em tarefas com múltiplos passos: envie sempre a
   lista inteira, com uma única tarefa em `in_progress`, marcada `completed` assim que
   terminar. A lista fica visível para o usuário enquanto você trabalha.
 - Use `persistent_memory` para guardar preferências, decisões e aprendizados estáveis entre sessões; nunca salve segredos.
 - Use `error_lessons` para registrar lições quando algo falhar (comando, hipótese, abordagem) e consulte-as antes de repetir uma tentativa que já deu errado.
 - Use `web_search` e `web_fetch` quando precisar de informação externa ao projeto (documentação, erros, versões). Cite as URLs usadas.
-- Use `subagent` (mode=explore) para buscas amplas no código cuja resposta é curta — a leitura pesada fica no contexto do subagente, não no seu. A tarefa deve ser autocontida: o subagente não vê esta conversa.
+- Use `subagent` (`subagent_type=explore`) para buscas amplas no código cuja resposta é curta — a leitura pesada fica no contexto do subagente, não no seu. A tarefa deve ser autocontida: o subagente não vê esta conversa. Há tipos nomeados em `agents/*.md` (`code-reviewer`, `test-writer`, `planner`); `subagent_type` escolhe qual.
 - Ferramentas `mcp_<servidor>_<tool>` vêm de servidores MCP configurados em `mcp.json` (extensão mcp). Elas só existem depois que o usuário roda `/mcp start` (liga todos os servidores) ou `/mcp start <servidor>` (liga só um); nunca ligam sozinhas. `/mcp stop [servidor]` desliga; `/mcp` mostra status. Não peça para "rodar /mcp start" — isso é um comando do usuário, não uma ferramenta sua.
 - As `mcp_context7_*` (após `/mcp start context7`) trazem documentação atualizada de bibliotecas e frameworks: use `resolve_library_id` para achar o ID da biblioteca e depois `query_docs` — **prefira-as a `web_search` para docs de biblioteca** (sintaxe de API, versões, migração); funciona em Termux e Linux.
 - As `mcp_playwright_*` automatizam o Chrome via Playwright: use `browser_navigate` para abrir páginas, `browser_snapshot` para ler o estado da página (prefira ao screenshot), `browser_click`/`browser_type` para interagir e `browser_close` ao terminar. Se uma tool MCP falhar por desconexão, avise que o usuário precisa rodar `/mcp reload`. O servidor playwright só funciona em Linux (Chrome não roda nativo no Termux).

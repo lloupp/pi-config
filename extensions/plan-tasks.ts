@@ -532,9 +532,16 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (event.toolName === "subagent") {
-      const mode = String((event.input as any).mode ?? "explore");
-      if (mode === "full") {
-        return { block: true, reason: "Modo plano ativo: subagent em mode=full bloqueado (pode editar). Use mode=explore." };
+      // Só o tipo `explore` é comprovadamente somente-leitura. Os tipos de agents/*.md
+      // trazem as próprias ferramentas, e esta extensão não tem como inspecioná-las (o
+      // loader dá um jiti por extensão), então em modo plano vale a lista conservadora.
+      const input = event.input as any;
+      const tipo = String(input.subagent_type ?? input.mode ?? "explore");
+      if (tipo !== "explore") {
+        return {
+          block: true,
+          reason: `Modo plano ativo: subagent_type="${tipo}" bloqueado (pode editar). Use subagent_type="explore".`,
+        };
       }
     }
 
