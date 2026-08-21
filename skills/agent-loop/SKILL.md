@@ -16,8 +16,8 @@ mudanças grandes sem validação e se perder.
 2. **Valide a cada iteração**, não só no fim: rode o teste mais específico do que acabou
    de mudar; a suíte completa fica para o fim de cada bloco. Antes de declarar pronto,
    use a skill `verify` — exercer o fluxo real é diferente de "os testes passam".
-3. **Registre o progresso** em `task_list` quando houver mais de 2 passos — marque `done`
-   imediatamente, não em lote.
+3. **Registre o progresso** em `task_list` quando houver mais de 2 passos — uma tarefa em
+   `in_progress` por vez, marcada `completed` assim que terminar, nunca em lote no fim.
 4. **Se a validação quebrar**, conserte antes de empilhar a próxima mudança (se precisar
    investigar, troque para `debug-loop`). Para reverter a última edição com segurança,
    use `/undo` (checkpoint).

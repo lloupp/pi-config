@@ -68,7 +68,9 @@ uma — a sessão sai do modo plano para o modo escolhido. `/implement` aprova m
 
 ## Ferramentas customizadas
 - Use `project_snapshot` para entender rapidamente a estrutura de um projeto antes de análise geral.
-- Use `task_list` para acompanhar progresso em tarefas com múltiplos passos.
+- Use `task_list` para acompanhar progresso em tarefas com múltiplos passos: envie sempre a
+  lista inteira, com uma única tarefa em `in_progress`, marcada `completed` assim que
+  terminar. A lista fica visível para o usuário enquanto você trabalha.
 - Use `persistent_memory` para guardar preferências, decisões e aprendizados estáveis entre sessões; nunca salve segredos.
 - Use `error_lessons` para registrar lições quando algo falhar (comando, hipótese, abordagem) e consulte-as antes de repetir uma tentativa que já deu errado.
 - Use `web_search` e `web_fetch` quando precisar de informação externa ao projeto (documentação, erros, versões). Cite as URLs usadas.

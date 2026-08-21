@@ -4,16 +4,16 @@ import { Type } from "typebox";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-type TaskAction = "list" | "add" | "done" | "open" | "clear";
+// Modelo do TodoWrite do Claude Code: a lista inteira é reenviada a cada chamada, e cada
+// tarefa carrega a forma ativa do verbo ("Migrando o checkpoint") usada enquanto ela roda.
+type TaskStatus = "pending" | "in_progress" | "completed";
 interface Task {
-  id: number;
-  text: string;
-  done: boolean;
+  content: string;
+  activeForm: string;
+  status: TaskStatus;
 }
 interface TaskDetails {
-  action: TaskAction;
   tasks: Task[];
-  nextId: number;
   error?: string;
 }
 
@@ -124,9 +124,43 @@ function cloneTasks(tasks: Task[]) {
   return tasks.map((task) => ({ ...task }));
 }
 
+const statusMark: Record<TaskStatus, string> = { pending: "☐", in_progress: "▶", completed: "☒" };
+
 function renderTasks(tasks: Task[]) {
   if (tasks.length === 0) return "Sem tarefas.";
-  return tasks.map((t) => `[${t.done ? "x" : " "}] #${t.id} ${t.text}`).join("\n");
+  // A tarefa em andamento aparece na forma ativa, como no Claude Code.
+  return tasks
+    .map((t) => `${statusMark[t.status]} ${t.status === "in_progress" ? t.activeForm : t.content}`)
+    .join("\n");
+}
+
+/**
+ * Normaliza e valida a lista inteira. O invariante do TodoWrite é uma única tarefa em
+ * andamento: mais de uma é erro devolvido ao modelo, e nenhuma é legítima só quando não
+ * sobrou nada pendente.
+ */
+export function normalizeTasks(raw: unknown): { tasks: Task[]; error?: string } {
+  if (!Array.isArray(raw)) return { tasks: [], error: "todos precisa ser uma lista" };
+
+  const tasks: Task[] = [];
+  for (const item of raw) {
+    const content = String((item as any)?.content ?? "").trim();
+    if (!content) return { tasks: [], error: "cada tarefa precisa de content" };
+    const status = String((item as any)?.status ?? "pending") as TaskStatus;
+    if (!(status in statusMark)) {
+      return { tasks: [], error: `status inválido: ${status} (use pending, in_progress ou completed)` };
+    }
+    tasks.push({ content, activeForm: String((item as any)?.activeForm ?? "").trim() || content, status });
+  }
+
+  const running = tasks.filter((t) => t.status === "in_progress");
+  if (running.length > 1) {
+    return { tasks: [], error: `apenas uma tarefa pode estar in_progress; vieram ${running.length}` };
+  }
+  if (running.length === 0 && tasks.some((t) => t.status === "pending")) {
+    return { tasks: [], error: "marque como in_progress a tarefa que você está fazendo agora" };
+  }
+  return { tasks };
 }
 
 function slugify(s: string) {
@@ -143,7 +177,6 @@ export default function (pi: ExtensionAPI) {
   let planMode = false;
   let activeBeforePlan: string[] | undefined;
   let tasks: Task[] = [];
-  let nextId = 1;
   let planFilePath: string | undefined; // absoluto — único caminho gravável no modo plano
   let planFileRel = ".pi/plans/plano.md"; // para mensagens legíveis
   let lastCtx: ExtensionContext | undefined; // handlers do barramento não recebem ctx
@@ -239,37 +272,59 @@ export default function (pi: ExtensionAPI) {
       if (m) items.push(m[1].trim());
     }
     if (items.length === 0) return 0;
-    tasks = items.map((text, i) => ({ id: i + 1, text, done: false }));
-    nextId = items.length + 1;
+    // A primeira já entra em andamento, para respeitar o invariante de uma ativa. O
+    // activeForm sai igual ao texto do passo; o agente reescreve no gerúndio na primeira
+    // atualização da lista.
+    tasks = items.map((text, i) => ({
+      content: text,
+      activeForm: text,
+      status: i === 0 ? "in_progress" : "pending",
+    }));
     return items.length;
   }
 
   function reconstructTasks(ctx: ExtensionContext) {
     tasks = [];
-    nextId = 1;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type !== "message") continue;
       const msg = entry.message as any;
       if (msg.role !== "toolResult" || msg.toolName !== "task_list") continue;
       const details = msg.details as TaskDetails | undefined;
-      if (!details) continue;
+      if (!details?.tasks) continue;
       tasks = cloneTasks(details.tasks);
-      nextId = details.nextId;
     }
   }
 
   function updatePlanUi(ctx: ExtensionContext) {
-    if (!ctx.hasUI) return;
+    if (!ctx?.hasUI) return;
+    const { fg } = ctx.ui.theme;
+
     if (planMode) {
-      ctx.ui.setStatus("plan-tasks", ctx.ui.theme.fg("warning", "📋 plan"));
+      ctx.ui.setStatus("plan-tasks", fg("warning", "📋 plan"));
       ctx.ui.setWidget("plan-tasks", [
-        ctx.ui.theme.fg("warning", "Modo plano ativo"),
-        ctx.ui.theme.fg("dim", `Escrita bloqueada (exceto ${planFileRel}). Chame exit_plan ou use /implement.`),
+        fg("warning", "Modo plano ativo"),
+        fg("dim", `Escrita bloqueada (exceto ${planFileRel}). Chame exit_plan ou use /implement.`),
       ]);
-    } else {
-      ctx.ui.setStatus("plan-tasks", undefined);
-      ctx.ui.setWidget("plan-tasks", undefined);
+      return;
     }
+
+    ctx.ui.setStatus("plan-tasks", undefined);
+
+    // Fora do modo plano o widget passa a ser a lista de tarefas, viva enquanto o agente
+    // trabalha — é o que torna o task_list um TodoWrite e não um bloco de notas.
+    if (tasks.length === 0) {
+      ctx.ui.setWidget("plan-tasks", undefined);
+      return;
+    }
+    const done = tasks.filter((t) => t.status === "completed").length;
+    ctx.ui.setWidget("plan-tasks", [
+      fg("accent", `Tarefas (${done}/${tasks.length})`),
+      ...tasks.map((t) => {
+        const line = `${statusMark[t.status]} ${t.status === "in_progress" ? t.activeForm : t.content}`;
+        if (t.status === "completed") return fg("dim", line);
+        return t.status === "in_progress" ? fg("accent", line) : line;
+      }),
+    ]);
   }
 
   // Ferramentas do modo plano: mantém write/edit NO schema para que o agente possa gravar
@@ -344,7 +399,8 @@ export default function (pi: ExtensionAPI) {
   function sendImplementPrompt(count: number, extra?: string) {
     const extraText = extra?.trim() ? `\nInstruções extras: ${extra.trim()}` : "";
     pi.sendUserMessage(
-      `Plano aprovado. Implemente em passos pequenos, marcando cada tarefa com task_list (done). ` +
+      `Plano aprovado. Implemente em passos pequenos, atualizando o task_list a cada passo: ` +
+        `uma tarefa em in_progress por vez, marcada completed assim que terminar. ` +
         `${count > 0 ? `Foram criadas ${count} tarefas a partir do plano.` : ""} Rode validações quando possível.${extraText}`,
       { deliverAs: "followUp" },
     );
@@ -562,46 +618,40 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_list",
     label: "Task List",
-    description: "Gerencia uma lista de tarefas da sessão. Ações: list, add(text), done(id), open(id), clear.",
-    promptSnippet: "Gerencia tarefas de implementação/revisão na sessão atual.",
-    promptGuidelines: ["Use task_list para acompanhar progresso quando houver múltiplos passos ou plano de implementação."],
+    description:
+      "Mantém a lista de tarefas da sessão. Envie SEMPRE a lista inteira, com o estado de cada tarefa " +
+      "(pending, in_progress, completed) — a lista enviada substitui a anterior.",
+    promptSnippet: "Acompanha o progresso de tarefas com múltiplos passos, visível para o usuário.",
+    promptGuidelines: [
+      "Use task_list em tarefas de vários passos, e envie a lista completa a cada atualização.",
+      "Exatamente uma tarefa em in_progress por vez. Marque completed assim que terminar cada uma — nunca acumule para marcar tudo no fim.",
+      "content é o imperativo ('Migrar o checkpoint'); activeForm é o gerúndio mostrado enquanto ela roda ('Migrando o checkpoint').",
+    ],
     parameters: Type.Object({
-      action: Type.String({ description: "Ação: list, add, done, open ou clear" }),
-      text: Type.Optional(Type.String({ description: "Texto para action=add" })),
-      id: Type.Optional(Type.Number({ description: "ID para action=done/open" })),
+      todos: Type.Array(
+        Type.Object({
+          content: Type.String({ description: "A tarefa, no imperativo" }),
+          activeForm: Type.String({ description: "A mesma tarefa no gerúndio, exibida enquanto está em andamento" }),
+          status: Type.String({ description: "pending, in_progress ou completed" }),
+        }),
+        { description: "A lista INTEIRA de tarefas; substitui a anterior" },
+      ),
     }),
-    async execute(_id, params) {
-      const action = params.action as TaskAction;
-      let text = "";
-      let error: string | undefined;
-
-      if (action === "add") {
-        if (!params.text?.trim()) error = "text obrigatório";
-        else {
-          const task = { id: nextId++, text: params.text.trim(), done: false };
-          tasks.push(task);
-          text = `Adicionada #${task.id}: ${task.text}`;
-        }
-      } else if (action === "done" || action === "open") {
-        const task = tasks.find((t) => t.id === params.id);
-        if (!task) error = `tarefa #${params.id} não encontrada`;
-        else {
-          task.done = action === "done";
-          text = `${action === "done" ? "Concluída" : "Reaberta"} #${task.id}: ${task.text}`;
-        }
-      } else if (action === "clear") {
-        const count = tasks.length;
-        tasks = [];
-        nextId = 1;
-        text = `Removidas ${count} tarefas.`;
-      } else {
-        text = renderTasks(tasks);
+    async execute(_id, params, _signal, _onUpdate, ctx) {
+      const { tasks: next, error } = normalizeTasks(params.todos);
+      if (error) {
+        return {
+          content: [{ type: "text", text: `Erro: ${error}` }],
+          isError: true,
+          details: { tasks: cloneTasks(tasks), error } satisfies TaskDetails,
+        };
       }
 
-      if (error) text = `Erro: ${error}`;
+      tasks = next;
+      updatePlanUi(ctx);
       return {
-        content: [{ type: "text", text: text || renderTasks(tasks) }],
-        details: { action, tasks: cloneTasks(tasks), nextId, error } satisfies TaskDetails,
+        content: [{ type: "text", text: renderTasks(tasks) }],
+        details: { tasks: cloneTasks(tasks) } satisfies TaskDetails,
       };
     },
   });
