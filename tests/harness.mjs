@@ -12,7 +12,7 @@ export const extensionsDir = join(repoRoot, "extensions");
 
 /**
  * Descobre a raiz do pacote @earendil-works/pi-coding-agent. O caminho varia por máquina
- * (versão do Node no diretório, Termux vs desktop), então nada aqui pode ser fixo:
+ * (versão do Node no diretório, máquina a máquina), então nada aqui pode ser fixo:
  * 1. PI_PACKAGE_DIR, se o usuário quiser apontar manualmente;
  * 2. o binário `pi` do PATH, cujo realpath cai em <pkg>/dist/cli.js;
  * 3. o node_modules global do npm.

@@ -95,8 +95,10 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const repo = (args ?? "").trim() || path.join(os.homedir(), "pi-config");
       const agentDir = path.join(os.homedir(), ".pi", "agent");
-      // Mesma lista de itens de configuração do install-pi-config.sh.
-      const items = ["AGENTS.md", "settings.json", "mcp.json", "keybindings.json", "prompts", "skills", "agents", "extensions", "themes"];
+      // Mesma lista de itens do install-pi-config.sh. O settings.json fica de fora nos dois
+      // sentidos: provider, modelos e pacotes são escolha de cada máquina, e sincronizá-los
+      // faria uma máquina sobrescrever a escolha da outra.
+      const items = ["AGENTS.md", "prompts", "skills", "extensions"];
 
       const status = await pi.exec("git", ["-C", repo, "status", "--porcelain"], { timeout: gitTimeoutMs });
       if (status.code !== 0) {

@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: Revisão de código focada em problemas reais, classificados por severidade, com sugestões pequenas e testáveis. Use quando o usuário pedir revisão, auditoria, refatoração segura ou análise de qualidade.
-compatibility: Termux/Android, Linux, projetos de código.
+compatibility: projetos de código.
 ---
 
 # Code Review
@@ -70,7 +70,6 @@ Na dúvida entre dois níveis, use o menor — severidade inflada também é fal
 - promise sem `.catch()` / async sem try-catch
 
 ### Ambiente
-- incompatibilidades Termux vs Linux (binários glibc, /tmp, sudo)
 - versões de runtime (API deprecada, flag removida)
 
 ### Testes
@@ -85,17 +84,3 @@ Na dúvida entre dois níveis, use o menor — severidade inflada também é fal
 - Sugestões de patch
 - Comandos para validar
 
-## Quando usar auditoria dedicada (`@vigolium/piolium`)
-
-A skills `code-review` cobre revisão manual. Para auditoria multi-fase automatizada
-(varredura de deps, análise de fluxo de dados, fuzzing de input), o pacote
-`@vigolium/piolium` complementa com subagents especializados:
-
-- **code-review** = revisão de PR/diff por um humano (você, o agente) — rapidos e contextual.
-- **piolium** = auditoria sistemática de segurança — multi-fase, retomável, com contexto isolado.
-
-Sugira `piolium` quando:
-- o usuário pedir "auditoria de segurança" (não só "revisão");
-- o projeto lida com dados sensíveis (auth, pagamentos, PII);
-- `code-review` encontrar muitos achados de segurança e quiser validação automatizada;
-- antes de um release/tag importante.

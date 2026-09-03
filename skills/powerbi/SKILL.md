@@ -1,7 +1,7 @@
 ---
 name: powerbi
 description: "Gerar e preparar dados, modelos e medidas DAX para dashboards Power BI: criar arquivos .pbix proxy via XMLA, consultas Power Query (M), medidas DAX, datasource push via REST API e embed de relatórios. Use quando o usuário pedir para criar, editar ou automatizar relatórios Power BI, escrever DAX/Power Query, ou preparar dados para dashboards. Para gráficos embutidos em planilhas Excel, use excel-charts."
-compatibility: Termux/Android (Python puro para DAX/M e dados), Linux com Power BI CLI (pbicli) e/ou .NET SDK. API REST Power BI requer Azure AD (register no portal). Power BI Desktop só roda em Windows/ARM.
+compatibility: Python puro para DAX/M e dados. Power BI CLI (pbicli) e/ou .NET SDK opcionais. API REST Power BI requer Azure AD (register no portal). Power BI Desktop só roda em Windows.
 ---
 
 # Power BI
@@ -12,7 +12,7 @@ Power BI é um ecossistema de BI da Microsoft com três camadas:
 2. **DAX** — modelo semântico: medidas calculadas, KPIs, time intelligence
 3. **Visual/Service** — relatórios e dashboards no service.powerbi.com
 
-No Termux/Linux, o **Power BI Desktop não roda nativamente** (é Windows/ARM). Mas o agente
+Fora do Windows, o **Power BI Desktop não roda nativamente**. Mas o agente
 pode: preparar dados (CSV/Excel/SQL) para import, escrever DAX e M, chamar a REST API
 do service, configurar embed e gerar templates de relatório (.pbit).
 
@@ -401,8 +401,7 @@ Se o usuário quer BI self-hosted (sem licença Power BI Pro/PPU):
 - **Redash** — queries + visualização
 - **Grafana** — métricas/temporal (não é BI genérico)
 
-Em Termux puro, nenhuma das opções roda sem `proot-distro`. No PC do usuário com Docker,
-Metabase é a recomendada (mais simples).
+Com Docker disponível, Metabase é a recomendada (mais simples).
 
 ## Processo recomendado
 
@@ -428,7 +427,7 @@ Próximos passos no Power BI Desktop: <o que o usuário precisa fazer manualment
 - **DAX com FILTER quando CALCULATE simples resolve**: FILTER itera linha a linha — use apenas quando necessário.
 - **Time intelligence sem tabela calendário**：medidas YTD/MoM requerem uma tabela calendário marcada como date table.
 - **Coluna calculada em vez de medida**: colunas armazenam (gastam memória); medidas calculam sob demanda.
-- **Esperar Power BI Desktop no Termux**: não roda. Prepare dados e escreva DAX aqui; o visual fica no Desktop ou service.
+- **Esperar Power BI Desktop fora do Windows**: não roda. Prepare dados e escreva DAX aqui; o visual fica no Desktop ou service.
 - **Credenciais Azure AD no código**: sempre via variáveis de ambiente (`PBI_TENANT_ID`, `PBI_CLIENT_ID`, etc.).
 - **Push data sem criar a tabela no dataset**: a tabela e colunas devem existir antes do POST de rows.
 - **Sem rate limit**: API tem limites — NÃO martele refresh em loop; verifique status antes de re-llamar.

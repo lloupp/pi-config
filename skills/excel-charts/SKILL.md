@@ -1,18 +1,18 @@
 ---
 name: excel-charts
 description: "Criar e editar planilhas Excel (.xlsx) com openpyxl: dados, fórmulas, formatação, gráficos (barra, pizza, linha, dispersão, área, radar, doughnut), condicional e estilos. Use quando o usuário pedir para gerar, editar ou visualizar planilhas Excel, criar gráficos em Excel ou exportar dados para .xlsx. Para análise de dados em Python, use pandas; para relatórios visuais interativos, use powerbi."
-compatibility: Termux/Android (pip install openpyxl), Linux. Python 3.8+. Sem compilação nativa.
+compatibility: Python 3.8+. Sem compilação nativa.
 ---
 
 # Excel Charts
 
-Cria e edita arquivos `.xlsx` com openpyxl — a biblioteca Python pura que funciona em Termux sem
-compilação nativa. Todos os exemplos abaixo foram testados em openpyxl 3.1.5.
+Cria e edita arquivos `.xlsx` com openpyxl — biblioteca Python pura, sem compilação
+nativa. Todos os exemplos abaixo foram testados em openpyxl 3.1.5.
 
 ## Pré-requisito
 
 ```bash
-pip install openpyxl    # 3.1.x — Python puro, funciona em Termux
+pip install openpyxl    # 3.1.x — Python puro
 ```
 
 Se o usuário só precisa ler CSV e converter, `pandas` também serve — mas para **gráficos embutidos**
@@ -217,13 +217,7 @@ ws.add_chart(line_chart, "E40")    # gráfico 3
 ## Fase 7 — Salvar
 
 ```python
-wb.save("relatorio.xlsx")    # caminho completo em Termux: ~/storage/... ou via SAF
-```
-
-Em Termux, para enviar o arquivo ao usuário via `termux-share` ou abrir com `termux-open`:
-
-```bash
-termux-open --chooser relatorio.xlsx    # abrir no app de planilha do Android
+wb.save("relatorio.xlsx")
 ```
 
 ## Fase 8 — Ler dados existentes
@@ -259,12 +253,10 @@ Formatação: <o que foi aplicado>
 Caminho: onde o usuário abre
 ```
 
-## Dicas Termux
+## Dicas
 
 - openpyxl é Python puro: `pip install openpyxl` funciona sem build-essential.
 - Se o arquivo for grande (>10MB), prefira escrever direto com openpyxl a carregar e reescrever.
-- Para abrir no Android: `termux-open --chooser arquivo.xlsx` ou `termux-share -a send arquivo.xlsx`.
-- Para acessar arquivos fora do Termux, use `saf` (Storage Access Framework) ou `~/storage/shared/`.
 
 ## Anti-padrões
 
