@@ -23,25 +23,43 @@ removido.
   - `update-pi` — `/update-pi` puxa este repo, reinstala e recarrega; avisa no início da
     sessão quando há commits novos. `/sync-pi` faz o inverso, publicando as mudanças
     locais de `~/.pi/agent`.
-- `skills/` — `verify`, `code-review`, `excel-charts`, `powerbi`. As duas primeiras
-  impõem disciplina; as duas últimas carregam API real (openpyxl, DAX/M) que não está no
-  peso do modelo. Skills são carregadas sob demanda: custam contexto só quando usadas.
+- `skills/` — `plan`, `delegate`, `verify`, `code-review`, `excel-charts`, `powerbi`. As
+  quatro primeiras impõem disciplina; as duas últimas carregam API real (openpyxl, DAX/M)
+  que não está no peso do modelo. Skills são carregadas sob demanda: custam contexto só
+  quando usadas.
 - `prompts/` — templates `debug` e `commit-msg`.
 - `tests/` — testes das extensões, runner nativo do Node.
 - `install-pi-config.sh`, `run-tests.sh`.
 
+## Plano, tarefas e subagente — sem extensão
+
+O pi não constrói plan mode, lista de tarefas nem subagents, e o motivo não é capricho:
+plan mode e subagent viram caixa preta, e lista de tarefas efêmera confunde o modelo mais
+do que ajuda. A objeção é a **falta de observabilidade**, não a funcionalidade.
+
+Tirada a objeção, os três continuam úteis — e cabem em duas skills, sem uma linha de
+TypeScript:
+
+- **`plan`** — o plano é um arquivo markdown com caixas de seleção. Isso resolve o plano e
+  a lista de tarefas de uma vez: um plano com `- [ ]` **é** a lista. O usuário lê com
+  `cat`, edita no editor dele enquanto o agente trabalha, e o progresso sobrevive à queda
+  da sessão porque mora no disco. Não bloqueia escrita nem abre diálogo de aprovação —
+  isso seria a máquina de permissões de volta; o gate é você responder "pode ir".
+- **`delegate`** — subagente é `pi -p` chamado por bash, com allowlist de tools. Você vê o
+  comando e a saída inteira. É a resposta do próprio autor: spawnar por bash em vez de um
+  protocolo próprio, porque assim nada acontece fora da tela.
+
+Custo: duas descrições de skill em contexto. O corpo só é lido quando a skill é usada.
+
 ## O que não está aqui, de propósito
 
-O pi deliberadamente não constrói permissões, plan mode, subagents, lista de tarefas nem
-MCP — não por limitação, mas porque cada um cobra um preço que o autor documenta:
-permissão é teatro quando o agente já executa código; plan mode e subagent viram caixa
-preta; lista de tarefas efêmera confunde o modelo mais do que ajuda; MCP custa tokens
-que uma CLI com README não custa.
+Permissões e MCP continuam fora. Permissão é teatro quando o agente já executa código, e
+MCP custa tokens que uma CLI com README não custa.
 
-Este repo já teve os cinco, reimplementados por paridade com o Claude Code. Somavam
-~2.800 linhas de extensão e um `AGENTS.md` de 13 KB injetado a cada turno — quatro vezes
-o prompt inteiro do pi. Foram removidos. Se algum fizer falta de verdade, ele está no
-histórico:
+Este repo já teve os dois — mais versões em extensão de plano, tarefas e subagente,
+reimplementadas por paridade com o Claude Code. Somavam ~2.800 linhas e um `AGENTS.md` de
+13 KB injetado a cada turno, quatro vezes o prompt inteiro do pi. Se algum fizer falta de
+verdade, está no histórico:
 
 ```bash
 git log --oneline master        # onde tudo ainda existe
