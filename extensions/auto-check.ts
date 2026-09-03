@@ -75,8 +75,9 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // SKILL.md: frontmatter YAML com exatamente name/description/compatibility
-  // (mesma validação da Fase 6 do skill-creator). Sem python3+yaml → melhor-esforço, ignora.
+  // SKILL.md: o pi só carrega a skill se o frontmatter tiver name e description não vazios
+  // (compatibility é opcional e campos extras são ignorados — docs/skills.md). Sem
+  // python3+yaml → melhor-esforço, ignora.
   async function checkSkillFrontmatter(absPath: string): Promise<string | undefined> {
     const script = [
       "import re, sys",
@@ -89,8 +90,8 @@ export default function (pi: ExtensionAPI) {
       "assert m, 'SKILL.md sem frontmatter ---...---'",
       "d = yaml.safe_load(m.group(1))",
       "assert isinstance(d, dict), 'frontmatter nao e um mapa YAML (dois-pontos sem aspas na description?)'",
-      "keys = sorted(d.keys())",
-      "assert keys == ['compatibility', 'description', 'name'], f'chaves devem ser name/description/compatibility, achei: {keys}'",
+      "for k in ('name', 'description'):",
+      "    assert d.get(k), f'frontmatter precisa de {k} nao vazio; achei: {sorted(d.keys())}'",
     ].join("\n");
     return checkCommand("python3", ["-c", script, absPath]);
   }

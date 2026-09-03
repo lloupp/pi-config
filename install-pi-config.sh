@@ -7,8 +7,10 @@ set -euo pipefail
 MODE="${1:---global}"
 SRC_DIR="${2:-$HOME/pi-config}"
 
-# Only config items are installed; repo-only files (README, .git, this script) stay out.
-ITEMS=(AGENTS.md settings.json mcp.json keybindings.json prompts skills agents extensions themes)
+# Só o que é compartilhável entre máquinas. O settings.json fica de fora de propósito:
+# provider, modelos e pacotes são escolha de cada máquina, e copiá-lo por cima apagaria
+# essa escolha a cada atualização.
+ITEMS=(AGENTS.md prompts skills extensions)
 
 case "$MODE" in
   --project|project)
