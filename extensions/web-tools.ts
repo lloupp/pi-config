@@ -31,32 +31,36 @@ function isBlockedHost(hostname: string): boolean {
   return false;
 }
 
-const blockedAddresses = new BlockList();
-blockedAddresses.addSubnet("0.0.0.0", 8, "ipv4");
-blockedAddresses.addSubnet("10.0.0.0", 8, "ipv4");
-blockedAddresses.addSubnet("100.64.0.0", 10, "ipv4");
-blockedAddresses.addSubnet("127.0.0.0", 8, "ipv4");
-blockedAddresses.addSubnet("169.254.0.0", 16, "ipv4");
-blockedAddresses.addSubnet("172.16.0.0", 12, "ipv4");
-blockedAddresses.addSubnet("192.0.0.0", 24, "ipv4");
-blockedAddresses.addSubnet("192.168.0.0", 16, "ipv4");
-blockedAddresses.addSubnet("198.18.0.0", 15, "ipv4");
-blockedAddresses.addSubnet("224.0.0.0", 4, "ipv4");
-blockedAddresses.addSubnet("240.0.0.0", 4, "ipv4");
+// Node trata IPv4 como IPv4-mapeado quando uma mesma BlockList mistura famílias. Manter
+// listas separadas evita que a regra IPv6 ::ffff:0:0/96 bloqueie todo IPv4 público.
+const blockedIpv4 = new BlockList();
+blockedIpv4.addSubnet("0.0.0.0", 8, "ipv4");
+blockedIpv4.addSubnet("10.0.0.0", 8, "ipv4");
+blockedIpv4.addSubnet("100.64.0.0", 10, "ipv4");
+blockedIpv4.addSubnet("127.0.0.0", 8, "ipv4");
+blockedIpv4.addSubnet("169.254.0.0", 16, "ipv4");
+blockedIpv4.addSubnet("172.16.0.0", 12, "ipv4");
+blockedIpv4.addSubnet("192.0.0.0", 24, "ipv4");
+blockedIpv4.addSubnet("192.168.0.0", 16, "ipv4");
+blockedIpv4.addSubnet("198.18.0.0", 15, "ipv4");
+blockedIpv4.addSubnet("224.0.0.0", 4, "ipv4");
+blockedIpv4.addSubnet("240.0.0.0", 4, "ipv4");
+
+const blockedIpv6 = new BlockList();
 // ::/96 cobre unspecified, loopback e IPv4-compatible. A faixa mapped é separada.
-blockedAddresses.addSubnet("::", 96, "ipv6");
-blockedAddresses.addSubnet("::ffff:0.0.0.0", 96, "ipv6");
-blockedAddresses.addSubnet("fc00::", 7, "ipv6");
-blockedAddresses.addSubnet("fe80::", 10, "ipv6");
-blockedAddresses.addSubnet("fec0::", 10, "ipv6");
-blockedAddresses.addSubnet("ff00::", 8, "ipv6");
+blockedIpv6.addSubnet("::", 96, "ipv6");
+blockedIpv6.addSubnet("::ffff:0.0.0.0", 96, "ipv6");
+blockedIpv6.addSubnet("fc00::", 7, "ipv6");
+blockedIpv6.addSubnet("fe80::", 10, "ipv6");
+blockedIpv6.addSubnet("fec0::", 10, "ipv6");
+blockedIpv6.addSubnet("ff00::", 8, "ipv6");
 
 /** Endereços que uma URL pública nunca deve alcançar diretamente. */
 export function isBlockedIp(address: string): boolean {
   const raw = address.toLowerCase().split("%")[0]; // remove zone id de IPv6, se houver
   const family = isIP(raw);
   if (family === 0) return true;
-  return blockedAddresses.check(raw, family === 4 ? "ipv4" : "ipv6");
+  return family === 4 ? blockedIpv4.check(raw, "ipv4") : blockedIpv6.check(raw, "ipv6");
 }
 
 interface ResolvedAddress {
