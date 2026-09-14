@@ -49,3 +49,22 @@ test("--global preserva o layout ~/.pi/agent", () => {
   assert.ok(existsSync(join(agent, "skills", "verify", "SKILL.md")));
   assert.ok(existsSync(join(agent, "prompts", "debug.md")));
 });
+
+test("--global com origem igual a ~/.pi/agent é idempotente e não apaga dados", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-global-self-"));
+  const agent = join(home, ".pi", "agent");
+  mkdirSync(join(agent, "extensions"), { recursive: true });
+  mkdirSync(join(agent, "skills"), { recursive: true });
+  mkdirSync(join(agent, "prompts"), { recursive: true });
+  writeFileSync(join(agent, "AGENTS.md"), "# regras locais\n");
+  writeFileSync(join(agent, "extensions", "x.ts"), "export default 1;\n");
+  writeFileSync(join(agent, "skills", "x.md"), "skill\n");
+  writeFileSync(join(agent, "prompts", "x.md"), "prompt\n");
+
+  runInstall(["--global", agent], { home });
+
+  assert.equal(readFileSync(join(agent, "AGENTS.md"), "utf8"), "# regras locais\n");
+  assert.ok(existsSync(join(agent, "extensions", "x.ts")));
+  assert.ok(existsSync(join(agent, "skills", "x.md")));
+  assert.ok(existsSync(join(agent, "prompts", "x.md")));
+});
