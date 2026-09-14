@@ -3,7 +3,7 @@ import { Type } from "typebox";
 import { lookup as dnsLookup } from "node:dns";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) pi-coding-agent web-tools";
 const untrustedNote =
@@ -31,37 +31,32 @@ function isBlockedHost(hostname: string): boolean {
   return false;
 }
 
+const blockedAddresses = new BlockList();
+blockedAddresses.addSubnet("0.0.0.0", 8, "ipv4");
+blockedAddresses.addSubnet("10.0.0.0", 8, "ipv4");
+blockedAddresses.addSubnet("100.64.0.0", 10, "ipv4");
+blockedAddresses.addSubnet("127.0.0.0", 8, "ipv4");
+blockedAddresses.addSubnet("169.254.0.0", 16, "ipv4");
+blockedAddresses.addSubnet("172.16.0.0", 12, "ipv4");
+blockedAddresses.addSubnet("192.0.0.0", 24, "ipv4");
+blockedAddresses.addSubnet("192.168.0.0", 16, "ipv4");
+blockedAddresses.addSubnet("198.18.0.0", 15, "ipv4");
+blockedAddresses.addSubnet("224.0.0.0", 4, "ipv4");
+blockedAddresses.addSubnet("240.0.0.0", 4, "ipv4");
+// ::/96 cobre unspecified, loopback e IPv4-compatible. A faixa mapped é separada.
+blockedAddresses.addSubnet("::", 96, "ipv6");
+blockedAddresses.addSubnet("::ffff:0.0.0.0", 96, "ipv6");
+blockedAddresses.addSubnet("fc00::", 7, "ipv6");
+blockedAddresses.addSubnet("fe80::", 10, "ipv6");
+blockedAddresses.addSubnet("fec0::", 10, "ipv6");
+blockedAddresses.addSubnet("ff00::", 8, "ipv6");
+
 /** Endereços que uma URL pública nunca deve alcançar diretamente. */
 export function isBlockedIp(address: string): boolean {
   const raw = address.toLowerCase().split("%")[0]; // remove zone id de IPv6, se houver
   const family = isIP(raw);
   if (family === 0) return true;
-
-  // Conservador: IPv4-mapeado em IPv6 volta a depender de parsing duplo e não oferece
-  // benefício para esta tool. Bloquear toda a faixa elimina variantes como ::ffff:7f00:1.
-  if (family === 6 && raw.startsWith("::ffff:")) return true;
-
-  if (family === 4) {
-    const parts = raw.split(".").map(Number);
-    const [a, b] = parts;
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true; // shared address space / CGNAT
-    if (a === 169 && b === 254) return true; // link-local / metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 192 && b === 0) return true; // protocol assignments especiais
-    if (a === 198 && (b === 18 || b === 19)) return true; // benchmark/private lab
-    if (a >= 224) return true; // multicast/reservado
-    return false;
-  }
-
-  if (raw === "::" || raw === "::1") return true;
-  const first = Number.parseInt(raw.split(":")[0] || "0", 16);
-  if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
-  if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
-  if ((first & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated, ainda interno)
-  if ((first & 0xff00) === 0xff00) return true; // multicast
-  return false;
+  return blockedAddresses.check(raw, family === 4 ? "ipv4" : "ipv6");
 }
 
 interface ResolvedAddress {
