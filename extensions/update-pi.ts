@@ -5,6 +5,7 @@ import * as path from "node:path";
 
 const gitTimeoutMs = 120_000;
 const installTimeoutMs = 60_000;
+const testTimeoutMs = 180_000;
 const fetchTimeoutMs = 15_000;
 
 export default function (pi: ExtensionAPI) {
@@ -36,7 +37,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("update-pi", {
-    description: "Atualiza o pi-config: git pull no repo, reinstala em ~/.pi/agent e recarrega",
+    description: "Atualiza o pi-config: git pull, testa, reinstala em ~/.pi/agent e recarrega",
     handler: async (args, ctx) => {
       const repo = (args ?? "").trim() || path.join(os.homedir(), "pi-config");
 
@@ -64,17 +65,26 @@ export default function (pi: ExtensionAPI) {
         newCommits = `commits novos:\n${log.stdout.trim()}`;
       }
 
-      // O instalador acabou de chegar do remoto: rodá-lo é executar código não revisado.
-      // Confirma mostrando o que veio no pull, para o usuário decidir com contexto.
+      // Tanto a suíte quanto o instalador acabaram de chegar do remoto e executam código.
+      // O usuário confirma UMA vez, vendo os commits, antes de qualquer execução deles.
       if (ctx.hasUI) {
         const ok = await ctx.ui.confirm(
-          "Rodar o instalador do pi-config?",
-          `Vai executar install-pi-config.sh de ${repo}, script que acabou de vir do remoto, e sobrescrever ~/.pi/agent.\n\n${newCommits}\n\nContinuar?`,
+          "Validar e instalar o pi-config atualizado?",
+          `Vai executar run-tests.sh de ${repo} e, somente se tudo passar, install-pi-config.sh para sobrescrever ~/.pi/agent.\n\n${newCommits}\n\nContinuar?`,
         );
         if (!ok) {
-          ctx.ui.notify("Instalação cancelada. O git pull já foi aplicado ao repo.", "info");
+          ctx.ui.notify("Validação/instalação cancelada. O git pull já foi aplicado ao repo.", "info");
           return;
         }
+      }
+
+      const tests = await pi.exec("bash", [path.join(repo, "run-tests.sh")], { timeout: testTimeoutMs });
+      if (tests.code !== 0 || tests.killed) {
+        ctx.ui.notify(
+          `Atualização NÃO instalada: a suíte falhou após o pull. ~/.pi/agent foi preservado.\n${(tests.stderr || tests.stdout || `exit ${tests.code}`).trim()}`,
+          "error",
+        );
+        return;
       }
 
       const install = await pi.exec("bash", [path.join(repo, "install-pi-config.sh"), "--global", repo], { timeout: installTimeoutMs });
@@ -83,7 +93,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      ctx.ui.notify(`pi-config atualizado (${newCommits})\n${install.stdout.trim()}`, "info");
+      ctx.ui.notify(`pi-config atualizado e validado (${newCommits})\n${install.stdout.trim()}`, "info");
       await ctx.reload();
     },
   });
@@ -113,11 +123,15 @@ export default function (pi: ExtensionAPI) {
       for (const item of items) {
         const src = path.join(agentDir, item);
         if (!fs.existsSync(src)) continue;
-        // cp direto por argv, sem `sh -c`: escape JSON não neutraliza $, crase ou aspas
-        // dentro do shell, e estes caminhos vêm de os.homedir().
-        const copy = await pi.exec("cp", ["-r", src, repo], { timeout: installTimeoutMs });
-        if (copy.code !== 0) {
-          ctx.ui.notify(`Falha copiando ${item}:\n${(copy.stderr || "").trim()}`, "error");
+        const dest = path.join(repo, item);
+        try {
+          // Espelha cada item existente, em vez de `cp -r` por cima: arquivos removidos
+          // de ~/.pi/agent também precisam desaparecer do repo, senão ressuscitam no
+          // próximo install. Itens inteiros ausentes são preservados por segurança.
+          fs.rmSync(dest, { recursive: true, force: true });
+          fs.cpSync(src, dest, { recursive: true });
+        } catch (error) {
+          ctx.ui.notify(`Falha espelhando ${item}: ${error instanceof Error ? error.message : String(error)}`, "error");
           return;
         }
       }

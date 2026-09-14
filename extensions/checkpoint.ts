@@ -21,6 +21,13 @@ interface Snapshot {
   turnLabel: string;
 }
 
+interface CurrentFileState {
+  path: string;
+  absPath: string;
+  existed: boolean;
+  content: Buffer | null;
+}
+
 export interface Turn {
   turnId?: string;
   label: string;
@@ -157,31 +164,54 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  /** Restaura os arquivos ao estado anterior ao turno que começa em `start`. */
-  async function restoreFiles(start: number, ctx: any): Promise<{ restored: number; skipped: string[] }> {
-    const skipped: string[] = [];
-    let restored = 0;
-
-    for (const entry of planRestore(snapshots, start)) {
-      if (entry.tooLarge) {
-        skipped.push(entry.path);
+  /** Captura o estado ATUAL antes do rewind para conseguir desfazer o próprio rewind. */
+  async function captureCurrentState(targets: Snapshot[]): Promise<CurrentFileState[]> {
+    const current: CurrentFileState[] = [];
+    for (const entry of targets) {
+      const existed = existsSync(entry.absPath);
+      if (!existed) {
+        current.push({ path: entry.path, absPath: entry.absPath, existed: false, content: null });
         continue;
       }
+      const size = statSync(entry.absPath).size;
+      if (size > maxFileBytes) {
+        throw new Error(
+          `${entry.path} tem ${Math.round(size / 1000)} KB no estado atual; não há como garantir rollback atômico acima de ${Math.round(maxFileBytes / 1000)} KB`,
+        );
+      }
+      current.push({ path: entry.path, absPath: entry.absPath, existed: true, content: await readFile(entry.absPath) });
+    }
+    return current;
+  }
+
+  /** Restaura exatamente o estado capturado antes de uma tentativa de rewind. */
+  async function restoreCurrentState(current: CurrentFileState[]): Promise<string[]> {
+    const errors: string[] = [];
+    for (const state of current) {
       try {
-        if (entry.existedBefore) {
-          await mkdir(dirname(entry.absPath), { recursive: true });
-          await writeFile(entry.absPath, entry.content ?? Buffer.alloc(0));
-        } else if (existsSync(entry.absPath)) {
-          await unlink(entry.absPath);
+        if (state.existed) {
+          await mkdir(dirname(state.absPath), { recursive: true });
+          await writeFile(state.absPath, state.content ?? Buffer.alloc(0));
+        } else if (existsSync(state.absPath)) {
+          await unlink(state.absPath);
         }
-        restored++;
       } catch (error) {
-        skipped.push(`${entry.path} (${error instanceof Error ? error.message : String(error)})`);
+        errors.push(`${state.path} (${error instanceof Error ? error.message : String(error)})`);
       }
     }
+    return errors;
+  }
 
-    snapshots = snapshots.slice(0, start);
-    return { restored, skipped };
+  /** Aplica snapshots sem mexer na lista: o commit do rewind só acontece depois. */
+  async function applyRestore(targets: Snapshot[]): Promise<void> {
+    for (const entry of targets) {
+      if (entry.existedBefore) {
+        await mkdir(dirname(entry.absPath), { recursive: true });
+        await writeFile(entry.absPath, entry.content ?? Buffer.alloc(0));
+      } else if (existsSync(entry.absPath)) {
+        await unlink(entry.absPath);
+      }
+    }
   }
 
   pi.registerCommand("rewind", {
@@ -221,6 +251,28 @@ export default function (pi: ExtensionAPI) {
       }
 
       const alvo = planRestore(snapshots, turn.start);
+      const indisponiveis = alvo.filter((entry) => entry.tooLarge);
+      if (querCodigo && indisponiveis.length > 0) {
+        ctx.ui.notify(
+          `Rewind de código cancelado: não há snapshot completo de ${indisponiveis.map((entry) => entry.path).join(", ")}. Nenhum arquivo foi alterado.`,
+          "warning",
+        );
+        return;
+      }
+
+      let current: CurrentFileState[] = [];
+      if (querCodigo) {
+        try {
+          current = await captureCurrentState(alvo);
+        } catch (error) {
+          ctx.ui.notify(
+            `Rewind de código cancelado antes de alterar arquivos: ${error instanceof Error ? error.message : String(error)}`,
+            "warning",
+          );
+          return;
+        }
+      }
+
       const ok = await ctx.ui.confirm(
         "Rebobinar?",
         [
@@ -234,23 +286,48 @@ export default function (pi: ExtensionAPI) {
       );
       if (!ok) return;
 
-      const partes: string[] = [];
+      let codigoAplicado = false;
       if (querCodigo) {
-        const { restored, skipped } = await restoreFiles(turn.start, ctx);
-        partes.push(`${restored} arquivo(s) restaurado(s)`);
-        if (skipped.length > 0) partes.push(`não restaurado(s): ${skipped.join(", ")}`);
+        try {
+          await applyRestore(alvo);
+          codigoAplicado = true;
+        } catch (error) {
+          const rollbackErrors = await restoreCurrentState(current);
+          const rollback = rollbackErrors.length === 0 ? "estado anterior restaurado" : `rollback incompleto: ${rollbackErrors.join(", ")}`;
+          ctx.ui.notify(
+            `Falha ao restaurar código: ${error instanceof Error ? error.message : String(error)} · ${rollback}`,
+            "error",
+          );
+          return;
+        }
       }
 
       if (querConversa && turn.turnId) {
         try {
           // position "before" descarta a mensagem do usuário e tudo o que veio depois.
-          await (ctx as any).fork(turn.turnId, { position: "before" });
-          partes.push("conversa rebobinada");
+          const result = await (ctx as any).fork(turn.turnId, { position: "before" });
+          if (result?.cancelled) throw new Error("fork da conversa cancelado");
         } catch (error) {
-          partes.push(`falha ao rebobinar a conversa: ${error instanceof Error ? error.message : String(error)}`);
+          const rollbackErrors = codigoAplicado ? await restoreCurrentState(current) : [];
+          const rollback =
+            !codigoAplicado || rollbackErrors.length === 0
+              ? "código preservado no estado anterior ao /rewind"
+              : `rollback do código incompleto: ${rollbackErrors.join(", ")}`;
+          ctx.ui.notify(
+            `Falha ao rebobinar a conversa: ${error instanceof Error ? error.message : String(error)} · ${rollback}. Checkpoints preservados.`,
+            "error",
+          );
+          return;
         }
       }
 
+      // Só agora o rewind é considerado confirmado: uma falha anterior mantém todos os
+      // checkpoints para que o usuário possa tentar novamente ou inspecionar o estado.
+      if (codigoAplicado) snapshots = snapshots.slice(0, turn.start);
+
+      const partes: string[] = [];
+      if (codigoAplicado) partes.push(`${alvo.length} arquivo(s) restaurado(s)`);
+      if (querConversa && turn.turnId) partes.push("conversa rebobinada");
       ctx.ui.notify(partes.join(" · "), "info");
     },
   });

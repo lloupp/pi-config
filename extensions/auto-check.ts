@@ -66,6 +66,18 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // Node 22 expõe um parser TypeScript sem executar o arquivo. `transform` aceita também
+  // sintaxe válida que exige lowering (enum, namespace, parameter properties), sem rodar
+  // o módulo editado nem exigir um compilador TypeScript separado.
+  async function checkTypeScript(absPath: string): Promise<string | undefined> {
+    const script = [
+      'const { stripTypeScriptTypes } = require("node:module")',
+      'const { readFileSync } = require("node:fs")',
+      'stripTypeScriptTypes(readFileSync(process.argv[1], "utf8"), { mode: "transform" })',
+    ].join(";");
+    return checkCommand("node", ["--no-warnings", "-e", script, absPath]);
+  }
+
   async function checkJson(absPath: string): Promise<string | undefined> {
     try {
       JSON.parse(await readFile(absPath, "utf8"));
@@ -104,6 +116,10 @@ export default function (pi: ExtensionAPI) {
       case ".cjs":
       case ".mjs":
         return checkJavaScript(absPath, ext);
+      case ".ts":
+      case ".mts":
+      case ".cts":
+        return checkTypeScript(absPath);
       case ".py":
         return checkCommand("python3", ["-m", "py_compile", absPath]);
       case ".sh":
@@ -145,14 +161,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("autocheck", {
-    description: "Liga/desliga verificação automática de sintaxe após edições (js, py, sh, json, frontmatter de SKILL.md). Uso: /autocheck [on|off]",
+    description: "Liga/desliga verificação automática de sintaxe após edições (ts, js, py, sh, json, frontmatter de SKILL.md). Uso: /autocheck [on|off]",
     handler: async (args, ctx) => {
       const arg = args.trim().toLowerCase();
       if (arg === "on") enabled = true;
       else if (arg === "off") enabled = false;
       else enabled = !enabled;
       persistEnabled(enabled);
-      ctx.ui.notify(`Auto-check: ${enabled ? "ligado" : "desligado"} (js, py, sh, json, SKILL.md)`, "info");
+      ctx.ui.notify(`Auto-check: ${enabled ? "ligado" : "desligado"} (ts, js, py, sh, json, SKILL.md)`, "info");
     },
   });
 }
