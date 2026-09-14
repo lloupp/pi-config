@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { importExtension } from "./harness.mjs";
+import { importExtension, loadExtension } from "./harness.mjs";
 
 const { fetchText, isBlockedIp, validateResolvedAddresses } = await importExtension("web-tools.ts");
 
@@ -44,5 +44,16 @@ test("a própria conexão recusa hostname público resolvido para loopback", asy
   await assert.rejects(
     fetchText(new URL("http://nome-publico.example/"), 1000, undefined, privateResolver),
     /endereço resolvido bloqueado/i,
+  );
+});
+
+test("web_fetch bloqueia IP literal privado antes de abrir socket", async () => {
+  const ext = await loadExtension("web-tools.ts");
+  const signal = new AbortController().signal;
+
+  // URL canonicaliza ::127.0.0.1 para ::7f00:1; como IP literal, Node não chama lookup.
+  await assert.rejects(
+    ext.tools.web_fetch.execute("call-1", { url: "http://[::127.0.0.1]/" }, signal),
+    /host bloqueado/i,
   );
 });
