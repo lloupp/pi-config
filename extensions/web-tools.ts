@@ -15,6 +15,8 @@ const untrustedNote =
 function isBlockedHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (!h) return true;
+  // IP literal não passa por DNS/lookup no socket; precisa usar a mesma política aqui.
+  if (isIP(h)) return isBlockedIp(h);
   if (h === "localhost" || h.endsWith(".localhost") || h === "::1" || h === "::" || h === "0.0.0.0") return true;
   if (h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".lan") || h === "home.arpa" || h.endsWith(".home.arpa")) return true;
   // IPv4 pontilhado: loopback/privado/link-local
