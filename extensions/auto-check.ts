@@ -66,13 +66,14 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // Node 22 expõe um parser TypeScript sem executar o arquivo. É exatamente o que o
-  // auto-check precisa: detectar sintaxe inválida sem disparar efeitos colaterais do .ts.
+  // Node 22 expõe um parser TypeScript sem executar o arquivo. `transform` aceita também
+  // sintaxe válida que exige lowering (enum, namespace, parameter properties), sem rodar
+  // o módulo editado nem exigir um compilador TypeScript separado.
   async function checkTypeScript(absPath: string): Promise<string | undefined> {
     const script = [
       'const { stripTypeScriptTypes } = require("node:module")',
       'const { readFileSync } = require("node:fs")',
-      'stripTypeScriptTypes(readFileSync(process.argv[1], "utf8"))',
+      'stripTypeScriptTypes(readFileSync(process.argv[1], "utf8"), { mode: "transform" })',
     ].join(";");
     return checkCommand("node", ["--no-warnings", "-e", script, absPath]);
   }
