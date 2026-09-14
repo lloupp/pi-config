@@ -16,7 +16,10 @@ test("classifica endereços locais e privados como bloqueados", () => {
     "fc00::1",
     "fd12:3456::1",
     "fe80::1",
+    "::127.0.0.1",
     "::ffff:127.0.0.1",
+    "::ffff:7f00:1",
+    "0:0:0:0:0:ffff:7f00:1",
   ];
   for (const address of blocked) assert.equal(isBlockedIp(address), true, address);
   assert.equal(isBlockedIp("93.184.216.34"), false);
