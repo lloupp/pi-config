@@ -15,6 +15,14 @@ fi
 
 SRC_DIR="$(cd "$SRC_DIR" && pwd -P)"
 
+canonical_dest() {
+  local dest="$1"
+  local parent
+  parent="$(dirname "$dest")"
+  mkdir -p "$parent"
+  printf '%s/%s\n' "$(cd "$parent" && pwd -P)" "$(basename "$dest")"
+}
+
 mirror_dir() {
   local src="$1"
   local dest="$2"
@@ -25,10 +33,15 @@ mirror_dir() {
     return
   fi
 
+  dest="$(canonical_dest "$dest")"
+  if [[ "$src" == "$dest" ]]; then
+    echo "  ✓ $label (já no destino)"
+    return
+  fi
+
   # Espelha em vez de mesclar: recurso removido da origem não pode continuar ativo
   # silenciosamente no destino.
   rm -rf "${dest:?}"
-  mkdir -p "$(dirname "$dest")"
   cp -r "$src" "$dest"
   echo "  ✓ $label"
 }
@@ -43,10 +56,11 @@ copy_file() {
     return
   fi
 
-  mkdir -p "$(dirname "$dest")"
+  dest="$(canonical_dest "$dest")"
 
-  # Em --project, a origem pode ser o próprio projeto atual. Nesse caso AGENTS.md já
-  # está exatamente no destino e `cp` recusaria copiar o arquivo sobre ele mesmo.
+  # Em --project, a origem pode ser o próprio projeto atual; em --global, o usuário
+  # também pode apontar explicitamente para ~/.pi/agent. Copiar sobre si mesmo falha e,
+  # no caso de diretórios, remover antes seria destrutivo.
   if [[ "$src" != "$dest" ]]; then
     cp "$src" "$dest"
   fi
