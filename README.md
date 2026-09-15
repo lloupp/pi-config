@@ -19,7 +19,8 @@ algo que o modelo não faz sozinho, e o que não passa nesse teste foi removido.
   - `lightpanda` — browser headless opcional. `browser_open` faz leitura isolada; para
     interação, `browser_start` cria uma sessão persistente por tarefa e
     `browser_click`/`browser_fill` atuam na mesma página/cookies até `browser_close`.
-    Redes privadas são bloqueadas após DNS e `/lightpanda` mostra disponibilidade/versão.
+    Em Linux executa `lightpanda` diretamente; no Termux roteia automaticamente pelo
+    `proot-distro` para Debian. Redes privadas continuam bloqueadas após DNS.
   - `checkpoint` — snapshot antes de cada edição do agente. `/undo` desfaz a última,
     `/checkpoints` lista, `/rewind` volta ao estado anterior a um pedido seu. Funciona
     fora de repositório git e o rewind é transacional: falha de conversa restaura o
@@ -100,26 +101,65 @@ Depois, reinicie o pi ou use `/reload`.
 
 ### Lightpanda opcional
 
-A extensão não instala pacote npm nem daemon. Ela usa somente o executável Lightpanda.
-Instale conforme a documentação oficial em `https://lightpanda.io/docs/quickstart` e
-confirme no Pi com:
-
-```text
-/lightpanda
-```
-
-Por padrão a extensão executa `lightpanda`. Para usar outro caminho — inclusive um wrapper
-que entre em um ambiente Linux separado — defina antes de abrir o Pi:
+A extensão não instala pacote npm nem daemon. Em Linux normal, ela chama `lightpanda`
+diretamente. Para usar outro executável ou wrapper em qualquer plataforma:
 
 ```bash
 export LIGHTPANDA_BIN=/caminho/para/lightpanda-ou-wrapper
 ```
 
-Os binários Linux oficiais atuais são ligados contra glibc. Em ambientes que não oferecem
-glibc diretamente, como uma instalação Termux pura, use um ambiente compatível/wrapper em
-vez de tentar executar o binário Linux diretamente.
+Confirme o runtime detectado e a versão com:
 
-Há dois modos:
+```text
+/lightpanda
+```
+
+#### Termux
+
+Os binários Linux oficiais do Lightpanda usam glibc, enquanto o Termux roda sobre o
+Android/Bionic. Por isso, sem `LIGHTPANDA_BIN`, a extensão detecta Termux e executa
+automaticamente:
+
+```text
+proot-distro login --shared-tmp debian -- lightpanda ...
+```
+
+É necessário preparar esse ambiente apenas uma vez. Um bootstrap atual para Debian é:
+
+```bash
+pkg install proot-distro
+proot-distro install debian
+proot-distro login debian -- bash -lc '
+  set -e
+  apt-get update
+  apt-get install -y ca-certificates curl
+  case "$(uname -m)" in
+    aarch64|arm64) asset=lightpanda-aarch64-linux ;;
+    x86_64|amd64) asset=lightpanda-x86_64-linux ;;
+    *) echo "Arquitetura não suportada: $(uname -m)" >&2; exit 1 ;;
+  esac
+  curl -fL "https://github.com/lightpanda-io/browser/releases/download/nightly/$asset" \
+    -o /usr/local/bin/lightpanda
+  chmod 0755 /usr/local/bin/lightpanda
+  lightpanda version
+'
+```
+
+Depois disso não há comando especial: `browser_open`, `browser_start`, `browser_click` e
+`browser_fill` escolhem o proot automaticamente no Termux. Para usar outra instalação:
+
+```bash
+export LIGHTPANDA_PROOT_DISTRO=debian          # nome do container; padrão debian
+export LIGHTPANDA_PROOT_BIN=/usr/local/bin/lightpanda
+```
+
+Variáveis `$LP_*` continuam funcionando no modo interativo. Para não colocar segredos nos
+argumentos visíveis por `ps`, a extensão gera durante a sessão um wrapper temporário com
+permissão `0600` no `$PREFIX/tmp`, monta esse diretório como `/tmp` no Debian e remove o
+arquivo ao encerrar o browser. Somente `$LP_*`, opções específicas de privacidade do
+Lightpanda e variáveis de proxy são encaminhadas.
+
+#### Modos de uso
 
 1. `browser_open` — stateless e barato: abre uma URL, executa JavaScript e devolve
    Markdown; cada chamada usa um browser isolado.
@@ -150,7 +190,8 @@ o código de verdade. Os que tocam disco usam diretórios temporários com `HOME
 
 A suíte também cobre instalação global/projeto, rollback atômico do `/rewind`, bloqueio
 SSRF após DNS, os gates de `/update-pi` e `/sync-pi`, montagem segura do comando
-Lightpanda e persistência/erros do protocolo da sessão interativa.
+Lightpanda, persistência/erros do protocolo da sessão interativa e roteamento
+Linux/Termux sem vazar `$LP_*` em argv.
 
 Se o pacote do pi não for encontrado, aponte o caminho:
 `PI_PACKAGE_DIR=/caminho/do/pacote bash run-tests.sh`.
