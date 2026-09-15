@@ -187,7 +187,6 @@ export function validateBrowserUrl(raw: string): URL {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`Protocolo não permitido: ${url.protocol} (use http/https)`);
   }
-  // Credencial em argv/processo ou logs pode vazar. Use cookies da sessão ou $LP_* no fill.
   if (url.username || url.password) {
     throw new Error("URL com usuário/senha embutidos não é permitida; não exponha credenciais na URL.");
   }
@@ -212,7 +211,6 @@ export function buildLightpandaArgs(params: BrowserOpenParams): string[] {
   const url = validateBrowserUrl(params.url);
   const waitMs = clampNumber(params.waitMs, defaultWaitMs, 0, maxWaitMs);
   const maxChars = clampNumber(params.maxChars, defaultMaxChars, 500, maxOutputChars);
-  // O dump é limitado em bytes pelo próprio browser e novamente em caracteres abaixo.
   const dumpMaxBytes = Math.min(maxChars * 4 + 1024, maxOutputChars * 4 + 1024);
 
   const args = [
@@ -246,9 +244,6 @@ export function buildLightpandaArgs(params: BrowserOpenParams): string[] {
 }
 
 export function buildAgentArgs(): string[] {
-  // `agent --no-llm` expõe as ferramentas nativas de browser como slash commands sem
-  // gastar tokens. A sessão vive no processo filho; cookies e página sobrevivem entre
-  // browser_click/browser_fill até browser_close ou session_shutdown.
   return [
     "agent",
     "--no-llm",
@@ -338,10 +333,18 @@ export class LightpandaReplSession {
       args = buildAgentArgs();
     }
 
-    this.proc = spawnProcess(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...env, LP_PI_MARKER: this.marker },
-    });
+    let proc: ChildProcessWithoutNullStreams;
+    try {
+      proc = spawnProcess(command, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...env, LP_PI_MARKER: this.marker },
+      });
+    } catch (error) {
+      this.cleanupWrapper();
+      const raw = error instanceof Error ? error.message : String(error);
+      throw new Error(isMissingRuntimeError(raw) ? setupMessage(this.launch) : `Lightpanda falhou ao iniciar: ${raw}`);
+    }
+    this.proc = proc;
 
     this.proc.stdout.setEncoding("utf8");
     this.proc.stderr.setEncoding("utf8");
@@ -371,7 +374,6 @@ export class LightpandaReplSession {
     try {
       unlinkSync(this.wrapperPath);
     } catch {
-      // O arquivo pode já ter sido limpo por outro caminho de encerramento.
     }
     this.wrapperPath = undefined;
   }
@@ -382,7 +384,6 @@ export class LightpandaReplSession {
     const markerIndex = this.active.stdout.indexOf(this.active.marker);
     if (markerIndex < 0) return;
 
-    // /getEnv pode prefixar o valor; descartamos a linha inteira que contém o marcador.
     const lineStart = this.active.stdout.lastIndexOf("\n", Math.max(0, markerIndex - 1)) + 1;
     const output = this.active.stdout.slice(0, lineStart).trim();
     const error = replError(this.active.stderr);
@@ -460,7 +461,6 @@ export class LightpandaReplSession {
       try {
         for (const instruction of instructions) this.proc.stdin.write(`${replCommand(instruction)}\n`);
         if (options.markdown !== false) this.proc.stdin.write("/markdown\n");
-        // Marcador fora da página: funciona inclusive quando goto/click falha.
         this.proc.stdin.write("/getEnv LP_PI_MARKER\n");
       } catch (error) {
         this.failActive(error instanceof Error ? error : new Error(String(error)));
@@ -478,7 +478,6 @@ export class LightpandaReplSession {
       if (!force && this.proc.stdin.writable) this.proc.stdin.write("/quit\n");
       this.proc.stdin.end();
     } catch {
-      // Processo já encerrou.
     }
     this.cleanupWrapper();
     if (force || this.proc.exitCode === null) {
