@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { loadExtension, makeCtx } from "./harness.mjs";
+import { importExtension, loadExtension, makeCtx } from "./harness.mjs";
 
+const { mirrorPathAtomic } = await importExtension("update-pi.ts");
 const ok = (stdout = "") => ({ code: 0, stdout, stderr: "", killed: false });
+
+test("mirrorPathAtomic preserva destino quando staging falha", () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-sync-atomic-"));
+  const dest = join(root, "extensions");
+  mkdirSync(dest, { recursive: true });
+  writeFileSync(join(dest, "estavel.ts"), "export default 'estavel';\n");
+
+  assert.throws(() => mirrorPathAtomic(join(root, "origem-inexistente"), dest));
+
+  assert.equal(readFileSync(join(dest, "estavel.ts"), "utf8"), "export default 'estavel';\n");
+  assert.equal(readdirSync(root).some((name) => name.startsWith(".extensions.sync-")), false);
+});
 
 test("/sync-pi espelha diretório e não ressuscita arquivo removido", async () => {
   const oldHome = process.env.HOME;
