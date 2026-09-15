@@ -27,6 +27,7 @@ mirror_dir() {
   local src="$1"
   local dest="$2"
   local label="$3"
+  local parent base stage backup=""
 
   if [[ ! -d "$src" ]]; then
     echo "  - $label não encontrado em $SRC_DIR; pulando." >&2
@@ -39,17 +40,55 @@ mirror_dir() {
     return
   fi
 
-  # Espelha em vez de mesclar: recurso removido da origem não pode continuar ativo
-  # silenciosamente no destino.
-  rm -rf "${dest:?}"
-  cp -r "$src" "$dest"
-  echo "  ✓ $label"
+  parent="$(dirname "$dest")"
+  base="$(basename "$dest")"
+  stage="$(mktemp -d "$parent/.${base}.stage.XXXXXX")"
+
+  # Copia tudo antes de tocar no destino atual. Se a cópia falhar (disco cheio,
+  # permissão, I/O), o recurso antigo continua intacto.
+  if ! cp -a "$src/." "$stage/"; then
+    rm -rf -- "$stage"
+    echo "Erro: falha preparando $label; destino atual preservado." >&2
+    return 1
+  fi
+
+  if [[ -e "$dest" || -L "$dest" ]]; then
+    backup="$(mktemp -d "$parent/.${base}.backup.XXXXXX")"
+    rmdir "$backup"
+    if ! mv -- "$dest" "$backup"; then
+      rm -rf -- "$stage"
+      echo "Erro: não foi possível preparar a troca de $label; destino atual preservado." >&2
+      return 1
+    fi
+  fi
+
+  if mv -- "$stage" "$dest"; then
+    [[ -z "$backup" ]] || rm -rf -- "$backup"
+    echo "  ✓ $label"
+    return
+  fi
+
+  # A cópia já estava pronta, mas a troca falhou. Tenta restaurar o destino antigo;
+  # se a restauração também falhar, preserva o backup no disco e informa o caminho.
+  if [[ -n "$backup" && -e "$backup" ]]; then
+    if mv -- "$backup" "$dest"; then
+      rm -rf -- "$stage"
+      echo "Erro: falha ativando $label; destino anterior restaurado." >&2
+    else
+      echo "Erro crítico: falha ativando $label e restaurando o destino. Backup preservado em $backup" >&2
+    fi
+  else
+    rm -rf -- "$stage"
+    echo "Erro: falha ativando $label; nenhum destino anterior existia." >&2
+  fi
+  return 1
 }
 
 copy_file() {
   local src="$1"
   local dest="$2"
   local label="$3"
+  local parent base stage
 
   if [[ ! -f "$src" ]]; then
     echo "  - $label não encontrado em $SRC_DIR; pulando." >&2
@@ -59,10 +98,24 @@ copy_file() {
   dest="$(canonical_dest "$dest")"
 
   # Em --project, a origem pode ser o próprio projeto atual; em --global, o usuário
-  # também pode apontar explicitamente para ~/.pi/agent. Copiar sobre si mesmo falha e,
-  # no caso de diretórios, remover antes seria destrutivo.
-  if [[ "$src" != "$dest" ]]; then
-    cp "$src" "$dest"
+  # também pode apontar explicitamente para ~/.pi/agent. Copiar sobre si mesmo falha.
+  if [[ "$src" == "$dest" ]]; then
+    echo "  ✓ $label (já no destino)"
+    return
+  fi
+
+  parent="$(dirname "$dest")"
+  base="$(basename "$dest")"
+  stage="$(mktemp "$parent/.${base}.stage.XXXXXX")"
+  if ! cp -p -- "$src" "$stage"; then
+    rm -f -- "$stage"
+    echo "Erro: falha preparando $label; destino atual preservado." >&2
+    return 1
+  fi
+  if ! mv -f -- "$stage" "$dest"; then
+    rm -f -- "$stage"
+    echo "Erro: falha ativando $label; destino atual preservado." >&2
+    return 1
   fi
   echo "  ✓ $label"
 }
