@@ -8,7 +8,11 @@ const {
   LightpandaReplSession,
   buildAgentArgs,
   buildLightpandaArgs,
+  buildLightpandaInvocation,
+  buildTermuxWrapper,
+  isTermuxEnvironment,
   replCommand,
+  resolveLightpandaLaunch,
   validateBrowserUrl,
 } = await importExtension("lightpanda.ts");
 
@@ -59,6 +63,76 @@ function makeFakeSpawn({ clickError = false } = {}) {
   return { spawn, calls, commands };
 }
 
+test("runtime Linux continua direto e Termux escolhe proot-distro Debian", () => {
+  const linux = resolveLightpandaLaunch({}, "linux");
+  assert.equal(linux.mode, "direct");
+  assert.equal(linux.command, "lightpanda");
+  assert.deepEqual(buildLightpandaInvocation(linux, ["version"]), {
+    command: "lightpanda",
+    args: ["version"],
+  });
+
+  const termuxEnv = {
+    PREFIX: "/data/data/com.termux/files/usr",
+    HOME: "/data/data/com.termux/files/home",
+    TERMUX_VERSION: "0.119",
+  };
+  assert.equal(isTermuxEnvironment(termuxEnv, "linux"), true);
+  const termux = resolveLightpandaLaunch(termuxEnv, "linux");
+  assert.equal(termux.mode, "termux-proot");
+  assert.equal(termux.distro, "debian");
+  assert.deepEqual(buildLightpandaInvocation(termux, ["version"]), {
+    command: "proot-distro",
+    args: ["login", "--shared-tmp", "debian", "--", "lightpanda", "version"],
+  });
+});
+
+test("LIGHTPANDA_BIN tem precedência mesmo dentro do Termux", () => {
+  const launch = resolveLightpandaLaunch(
+    {
+      TERMUX_VERSION: "0.119",
+      PREFIX: "/data/data/com.termux/files/usr",
+      LIGHTPANDA_BIN: "/data/local/bin/lightpanda-wrapper",
+    },
+    "android",
+  );
+  assert.equal(launch.mode, "direct");
+  assert.equal(launch.command, "/data/local/bin/lightpanda-wrapper");
+});
+
+test("wrapper do proot encaminha apenas env permitido e mantém segredo fora de argv", async () => {
+  const env = {
+    TERMUX_VERSION: "0.119",
+    PREFIX: "/data/data/com.termux/files/usr",
+    LP_PASSWORD: "segredo muito secreto",
+    OTHER_SECRET: "nao-deve-passar",
+    HTTPS_PROXY: "http://proxy.example:8080",
+  };
+  const wrapper = buildTermuxWrapper("marker-test", "/usr/local/bin/lightpanda", env);
+  assert.match(wrapper, /LP_PI_MARKER/);
+  assert.match(wrapper, /LP_PASSWORD/);
+  assert.match(wrapper, /HTTPS_PROXY/);
+  assert.doesNotMatch(wrapper, /OTHER_SECRET/);
+  assert.match(wrapper, /exec '\/usr\/local\/bin\/lightpanda' "\$@"/);
+
+  const launch = resolveLightpandaLaunch(env, "android");
+  const fake = makeFakeSpawn();
+  const session = new LightpandaReplSession(launch, fake.spawn, env);
+  const result = await session.execute(
+    { name: "goto", args: { url: "https://example.com" } },
+    { markdown: true },
+  );
+
+  assert.match(result, /Página atual/);
+  assert.equal(fake.calls[0].command, "proot-distro");
+  assert.deepEqual(fake.calls[0].args.slice(0, 4), ["login", "--shared-tmp", "debian", "--"]);
+  assert.equal(fake.calls[0].args[4], "bash");
+  assert.match(fake.calls[0].args[5], /^\/tmp\/pi-lightpanda-/);
+  assert.ok(fake.calls[0].args.includes("agent"));
+  assert.doesNotMatch(fake.calls[0].args.join(" "), /segredo muito secreto/);
+  session.close(true);
+});
+
 test("browser_open usa Lightpanda com JS renderizado, limite e bloqueio de rede privada", async () => {
   const calls = [];
   const exec = async (command, args, options) => {
@@ -84,6 +158,7 @@ test("browser_open usa Lightpanda com JS renderizado, limite e bloqueio de rede 
   assert.equal(calls[0].args.at(-1), "https://example.com/app");
   assert.match(result.content[0].text, /CONTEÚDO EXTERNO NÃO CONFIÁVEL/);
   assert.match(result.content[0].text, /Conteúdo carregado por JavaScript/);
+  assert.equal(result.details.runtime, "direct");
 });
 
 test("URL não-http é rejeitada antes de executar o browser", async () => {
@@ -193,9 +268,10 @@ test("binário ausente produz erro de instalação acionável no modo stateless"
   );
 });
 
-test("/lightpanda mostra a versão quando o binário está disponível", async () => {
+test("/lightpanda mostra a versão e o runtime quando o binário está disponível", async () => {
   const avisos = [];
   const ext = await loadExtension("lightpanda.ts", { exec: async () => ok("lightpanda 0.0-test\n") });
   await ext.commands.lightpanda("", makeCtx({ ui: { notify: (msg) => avisos.push(msg) } }));
   assert.match(avisos.join("\n"), /0\.0-test/);
+  assert.match(avisos.join("\n"), /Runtime:/);
 });
