@@ -16,6 +16,9 @@ algo que o modelo não faz sozinho, e o que não passa nesse teste foi removido.
   - `web-tools` — `web_search` e `web_fetch`. O pi não tem acesso à internet embutido.
     URLs internas/privadas são bloqueadas tanto pelo hostname quanto pelo endereço
     resolvido usado pela própria conexão.
+  - `lightpanda` — `browser_open` para páginas que precisam de JavaScript/renderização de
+    browser. Usa o binário Lightpanda opcional, devolve Markdown e bloqueia redes privadas
+    após DNS. `/lightpanda` mostra se o binário está disponível.
   - `checkpoint` — snapshot antes de cada edição do agente. `/undo` desfaz a última,
     `/checkpoints` lista, `/rewind` volta ao estado anterior a um pedido seu. Funciona
     fora de repositório git e o rewind é transacional: falha de conversa restaura o
@@ -94,6 +97,31 @@ pedir confiança no projeto antes de carregar recursos locais.
 
 Depois, reinicie o pi ou use `/reload`.
 
+### Lightpanda opcional
+
+`browser_open` só precisa de um executável Lightpanda; não há pacote npm local nem daemon
+obrigatório. Instale conforme a documentação oficial em
+`https://lightpanda.io/docs/quickstart` e confirme no Pi com:
+
+```text
+/lightpanda
+```
+
+Por padrão a extensão executa `lightpanda`. Para usar outro caminho — inclusive um wrapper
+que entre em um ambiente Linux separado — defina antes de abrir o Pi:
+
+```bash
+export LIGHTPANDA_BIN=/caminho/para/lightpanda-ou-wrapper
+```
+
+Os binários Linux oficiais atuais são ligados contra glibc. Em ambientes que não oferecem
+glibc diretamente, como uma instalação Termux pura, use um ambiente compatível/wrapper em
+vez de tentar executar o binário Linux diretamente.
+
+O MVP é deliberadamente stateless: abre uma URL, executa JavaScript, espera a renderização
+e devolve Markdown. Click, fill, cookies persistentes e sessão CDP ficam fora desta
+primeira versão. Para páginas simples, `web_fetch` continua sendo a opção mais barata.
+
 ## Testes
 
 ```bash
@@ -106,7 +134,8 @@ o código de verdade. Os que tocam disco usam diretórios temporários com `HOME
 `PI_CODING_AGENT_DIR` isolados — a configuração real nunca é lida nem escrita.
 
 A suíte também cobre instalação global/projeto, rollback atômico do `/rewind`, bloqueio
-SSRF após DNS e os gates de `/update-pi` e `/sync-pi`.
+SSRF após DNS, os gates de `/update-pi` e `/sync-pi` e a montagem segura do comando
+Lightpanda.
 
 Se o pacote do pi não for encontrado, aponte o caminho:
 `PI_PACKAGE_DIR=/caminho/do/pacote bash run-tests.sh`.
