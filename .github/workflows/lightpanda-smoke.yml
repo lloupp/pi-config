@@ -1,0 +1,52 @@
+name: Lightpanda smoke
+
+on:
+  pull_request:
+    paths:
+      - "extensions/lightpanda.ts"
+      - "tests/lightpanda.test.mjs"
+      - ".github/workflows/lightpanda-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download current Lightpanda nightly
+        run: |
+          curl -fL --retry 3 --connect-timeout 15 \
+            -o /tmp/lightpanda \
+            https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux
+          chmod +x /tmp/lightpanda
+          /tmp/lightpanda version
+
+      - name: Exercise non-TTY interactive REPL
+        env:
+          LIGHTPANDA_DISABLE_TELEMETRY: "true"
+          LP_PI_MARKER: "pi-config-repl-smoke"
+        run: |
+          {
+            printf '%s\n' '/goto {"url":"https://example.com"}'
+            printf '%s\n' '/click {"selector":"a"}'
+            printf '%s\n' '/goto {"url":"https://news.ycombinator.com/login"}'
+            printf '%s\n' '/fill {"selector":"input[name=\"acct\"]","value":"pi-config-smoke"}'
+            printf '%s\n' '/markdown'
+            printf '%s\n' '/getEnv LP_PI_MARKER'
+            printf '%s\n' '/quit'
+          } | timeout 45s /tmp/lightpanda agent \
+              --no-llm \
+              --block-private-networks \
+              --verbosity low \
+              --log-level error \
+              > /tmp/lightpanda-out.txt \
+              2> /tmp/lightpanda-err.txt
+
+          grep -q 'pi-config-repl-smoke' /tmp/lightpanda-out.txt
+          if grep -E '(^|[[:space:]])Error:|click failed:|fill failed:|goto failed:' /tmp/lightpanda-err.txt; then
+            cat /tmp/lightpanda-err.txt >&2
+            exit 1
+          fi
