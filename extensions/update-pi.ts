@@ -8,6 +8,65 @@ const installTimeoutMs = 60_000;
 const testTimeoutMs = 180_000;
 const fetchTimeoutMs = 15_000;
 
+function pathEntryExists(target: string): boolean {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/**
+ * Espelha um arquivo/diretório sem apagar o destino antes da cópia terminar.
+ * O staging e o backup ficam no mesmo diretório do destino para que os renames
+ * sejam locais ao mesmo filesystem. Se a ativação falhar, restaura o destino antigo.
+ */
+export function mirrorPathAtomic(src: string, dest: string): void {
+  const parent = path.dirname(dest);
+  const base = path.basename(dest);
+  fs.mkdirSync(parent, { recursive: true });
+
+  const txnDir = fs.mkdtempSync(path.join(parent, `.${base}.sync-`));
+  const staged = path.join(txnDir, "staged");
+  const backup = path.join(txnDir, "backup");
+  let originalMoved = false;
+  let preserveTxn = false;
+
+  try {
+    // Cópia completa primeiro. Se falhar, o destino ainda não foi tocado.
+    fs.cpSync(src, staged, { recursive: true });
+
+    if (pathEntryExists(dest)) {
+      fs.renameSync(dest, backup);
+      originalMoved = true;
+    }
+
+    try {
+      fs.renameSync(staged, dest);
+    } catch (commitError) {
+      if (originalMoved && pathEntryExists(backup)) {
+        try {
+          fs.renameSync(backup, dest);
+          originalMoved = false;
+        } catch (rollbackError) {
+          // Não apaga o backup se nem o rollback conseguiu recolocá-lo no destino.
+          preserveTxn = true;
+          throw new Error(
+            `Falha ativando ${dest} e também restaurando o destino anterior. ` +
+              `Backup preservado em ${backup}. Ativação: ${commitError instanceof Error ? commitError.message : String(commitError)}. ` +
+              `Rollback: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
+      }
+      throw commitError;
+    }
+  } finally {
+    if (!preserveTxn) fs.rmSync(txnDir, { recursive: true, force: true });
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   // Ao iniciar a sessão, verifica em segundo plano se o repo remoto tem
   // commits novos e avisa para rodar /update-pi. Falhas (offline, sem repo,
@@ -122,14 +181,12 @@ export default function (pi: ExtensionAPI) {
 
       for (const item of items) {
         const src = path.join(agentDir, item);
-        if (!fs.existsSync(src)) continue;
+        if (!pathEntryExists(src)) continue;
         const dest = path.join(repo, item);
         try {
-          // Espelha cada item existente, em vez de `cp -r` por cima: arquivos removidos
-          // de ~/.pi/agent também precisam desaparecer do repo, senão ressuscitam no
-          // próximo install. Itens inteiros ausentes são preservados por segurança.
-          fs.rmSync(dest, { recursive: true, force: true });
-          fs.cpSync(src, dest, { recursive: true });
+          // Staging no mesmo filesystem: arquivos removidos continuam sumindo no espelho,
+          // mas uma falha de cópia não apaga o destino que já estava válido.
+          mirrorPathAtomic(src, dest);
         } catch (error) {
           ctx.ui.notify(`Falha espelhando ${item}: ${error instanceof Error ? error.message : String(error)}`, "error");
           return;
