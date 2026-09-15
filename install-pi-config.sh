@@ -73,7 +73,7 @@ mirror_dir() {
 
   # A cópia já estava pronta, mas a troca falhou. Tenta restaurar o destino antigo;
   # se a restauração também falhar, preserva o backup no disco e informa o caminho.
-  if [[ -n "$backup" && -e "$backup" ]]; then
+  if [[ -n "$backup" && ( -e "$backup" || -L "$backup" ) ]]; then
     if mv -- "$backup" "$dest"; then
       rm -rf -- "$stage"
       echo "Erro: falha ativando $label; destino anterior restaurado." >&2
