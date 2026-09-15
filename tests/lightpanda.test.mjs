@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { PassThrough, Writable } from "node:stream";
 import { test } from "node:test";
 import { importExtension, loadExtension, makeCtx } from "./harness.mjs";
@@ -131,6 +133,23 @@ test("wrapper do proot encaminha apenas env permitido e mantém segredo fora de 
   assert.ok(fake.calls[0].args.includes("agent"));
   assert.doesNotMatch(fake.calls[0].args.join(" "), /segredo muito secreto/);
   session.close(true);
+});
+
+test("wrapper temporário é removido quando spawn falha sincronicamente", () => {
+  const env = {
+    TERMUX_VERSION: "0.119",
+    PREFIX: "/data/data/com.termux/files/usr",
+    LP_PASSWORD: "nao-pode-ficar-no-disco",
+  };
+  const launch = resolveLightpandaLaunch(env, "android");
+  const list = () => readdirSync(tmpdir()).filter((name) => name.startsWith("pi-lightpanda-") && name.endsWith(".sh")).sort();
+  const before = list();
+
+  assert.throws(
+    () => new LightpandaReplSession(launch, () => { throw new Error("spawn sync fail"); }, env),
+    /falhou ao iniciar/i,
+  );
+  assert.deepEqual(list(), before);
 });
 
 test("browser_open usa Lightpanda com JS renderizado, limite e bloqueio de rede privada", async () => {
