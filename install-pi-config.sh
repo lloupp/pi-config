@@ -43,10 +43,13 @@ mirror_dir() {
   parent="$(dirname "$dest")"
   base="$(basename "$dest")"
   stage="$(mktemp -d "$parent/.${base}.stage.XXXXXX")"
+  # O nome temporário precisa estar no mesmo filesystem, mas a cópia deve criar a raiz
+  # para preservar permissões/metadados do diretório de origem (mktemp cria 0700).
+  rmdir "$stage"
 
   # Copia tudo antes de tocar no destino atual. Se a cópia falhar (disco cheio,
   # permissão, I/O), o recurso antigo continua intacto.
-  if ! cp -a "$src/." "$stage/"; then
+  if ! cp -a -- "$src" "$stage"; then
     rm -rf -- "$stage"
     echo "Erro: falha preparando $label; destino atual preservado." >&2
     return 1
