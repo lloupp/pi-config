@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { repoRoot } from "./harness.mjs";
 
-function runInstall(args, { cwd, home } = {}) {
+function runInstall(args, { cwd, home, env } = {}) {
   return execFileSync("bash", [join(repoRoot, "install-pi-config.sh"), ...args], {
     cwd: cwd ?? repoRoot,
-    env: { ...process.env, HOME: home ?? process.env.HOME },
+    env: { ...process.env, ...env, HOME: home ?? process.env.HOME },
     encoding: "utf8",
   });
 }
@@ -36,6 +36,31 @@ test("--project espelha diretórios e remove recurso obsoleto", () => {
 
   assert.equal(existsSync(join(staleDir, "obsoleta.ts")), false);
   assert.ok(existsSync(join(staleDir, "checkpoint.ts")));
+});
+
+test("falha de cópia não apaga o diretório já instalado", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-atomic-"));
+  const source = mkdtempSync(join(tmpdir(), "pi-source-atomic-"));
+  const fakeBin = mkdtempSync(join(tmpdir(), "pi-fake-bin-"));
+  const dest = join(project, ".pi", "extensions");
+
+  mkdirSync(join(source, "extensions"), { recursive: true });
+  writeFileSync(join(source, "extensions", "nova.ts"), "export default 'nova';\n");
+  mkdirSync(dest, { recursive: true });
+  writeFileSync(join(dest, "estavel.ts"), "export default 'estavel';\n");
+
+  const fakeCp = join(fakeBin, "cp");
+  writeFileSync(fakeCp, "#!/bin/sh\nexit 77\n");
+  chmodSync(fakeCp, 0o755);
+
+  assert.throws(
+    () => runInstall(["--project", source], { cwd: project, env: { PATH: `${fakeBin}:${process.env.PATH}` } }),
+    /Command failed|status 1|status 77/i,
+  );
+
+  assert.equal(readFileSync(join(dest, "estavel.ts"), "utf8"), "export default 'estavel';\n");
+  assert.equal(existsSync(join(dest, "nova.ts")), false);
+  assert.equal(readdirSync(join(project, ".pi")).some((name) => name.startsWith(".extensions.stage.")), false);
 });
 
 test("--global preserva o layout ~/.pi/agent", () => {
