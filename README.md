@@ -21,6 +21,10 @@ removido.
   - [`observatorio`](extensions/observatorio/README.md) — `/observatorio` abre uma
     constelação dos arquivos e ferramentas da sessão, com falhas em destaque e replay
     visual sem reexecutar nada. Layout adaptável ao Termux e ao Linux, sem IA extra.
+  - [`lightpanda`](extensions/lightpanda.md) — `browser_open` renderiza páginas que
+    dependem de JavaScript, e `browser_start`/`click`/`fill`/`close` interagem com elas
+    mantendo a sessão. O `web_fetch` só lê HTML estático. Exige o binário do Lightpanda;
+    no Termux, roda via `proot-distro`.
   - `auto-check` — verifica sintaxe após cada edição (js, py, sh, json e frontmatter de
     `SKILL.md`); o erro volta direto ao agente para corrigir. `/autocheck on|off`.
   - `update-pi` — `/update-pi` puxa este repo, reinstala e recarrega; avisa no início da
@@ -65,8 +69,8 @@ reimplementadas por paridade com o Claude Code. Somavam ~2.800 linhas e um `AGEN
 verdade, está no histórico:
 
 ```bash
-git log --oneline master        # onde tudo ainda existe
-git checkout master -- extensions/permissions.ts
+git log --oneline --all -- extensions/permissions.ts   # commits onde ele existiu
+git checkout 55d032b -- extensions/permissions.ts
 ```
 
 Voltar uma peça porque você sentiu falta dela é o critério certo. Voltar porque outra
@@ -85,7 +89,7 @@ bash install-pi-config.sh              # global, em ~/.pi/agent
 bash install-pi-config.sh --project    # no projeto atual, em .pi/agent
 ```
 
-Depois, reinicie o pi ou use `/reload-pi`.
+Depois, reinicie o pi ou use `/reload`.
 
 ## Testes
 
