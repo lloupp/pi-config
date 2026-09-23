@@ -93,3 +93,35 @@ test("--global com origem igual a ~/.pi/agent é idempotente e não apaga dados"
   assert.ok(existsSync(join(agent, "skills", "x.md")));
   assert.ok(existsSync(join(agent, "prompts", "x.md")));
 });
+
+test("--project guarda o AGENTS.md próprio do projeto em AGENTS.md.bak", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-bak-"));
+  writeFileSync(join(project, "AGENTS.md"), "# regras do projeto\n");
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(readFileSync(join(project, "AGENTS.md.bak"), "utf8"), "# regras do projeto\n");
+  assert.equal(readFileSync(join(project, "AGENTS.md"), "utf8"), readFileSync(join(repoRoot, "AGENTS.md"), "utf8"));
+});
+
+test("--project não cria backup quando o AGENTS.md já é igual à origem", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-same-"));
+  writeFileSync(join(project, "AGENTS.md"), readFileSync(join(repoRoot, "AGENTS.md"), "utf8"));
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(existsSync(join(project, "AGENTS.md.bak")), false);
+});
+
+test("--project não sobrescreve um AGENTS.md.bak existente", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-bak2-"));
+  writeFileSync(join(project, "AGENTS.md"), "# versão nova do projeto\n");
+  writeFileSync(join(project, "AGENTS.md.bak"), "# backup antigo\n");
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(readFileSync(join(project, "AGENTS.md.bak"), "utf8"), "# backup antigo\n");
+  const extra = readdirSync(project).filter((name) => /^AGENTS\.md\.bak\.\d+$/.test(name));
+  assert.equal(extra.length, 1);
+  assert.equal(readFileSync(join(project, extra[0]), "utf8"), "# versão nova do projeto\n");
+});

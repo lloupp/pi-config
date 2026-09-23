@@ -144,6 +144,14 @@ case "$MODE" in
     # O DefaultResourceLoader do Pi procura contexto em <projeto>/AGENTS.md e os demais
     # recursos em <projeto>/.pi/{prompts,skills,extensions}. `.pi/agent` não é um local
     # de descoberta de recursos de projeto.
+    # O AGENTS.md na raiz costuma ser do próprio projeto: guarda uma cópia antes de
+    # sobrescrever, sem nunca apagar um backup anterior.
+    if [[ -f "$PROJECT_ROOT/AGENTS.md" ]] && ! cmp -s "$SRC_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"; then
+      BACKUP="$PROJECT_ROOT/AGENTS.md.bak"
+      [[ ! -e "$BACKUP" ]] || BACKUP="$BACKUP.$(date +%Y%m%d%H%M%S)"
+      cp -p -- "$PROJECT_ROOT/AGENTS.md" "$BACKUP"
+      echo "  ! AGENTS.md do projeto salvo em $(basename "$BACKUP")" >&2
+    fi
     copy_file "$SRC_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" "AGENTS.md"
     mirror_dir "$SRC_DIR/prompts" "$PI_DIR/prompts" ".pi/prompts"
     mirror_dir "$SRC_DIR/skills" "$PI_DIR/skills" ".pi/skills"
