@@ -200,7 +200,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const host = os.hostname() || "local";
-      const files = changed.stdout.trim().split("\n").map((l) => l.slice(3)).slice(0, 8).join(", ");
+      const files = changed.stdout.trimEnd().split("\n").map((l) => l.slice(3)).slice(0, 8).join(", ");
       await pi.exec("git", ["-C", repo, "add", "-A"], { timeout: gitTimeoutMs });
       const commit = await pi.exec("git", ["-C", repo, "commit", "-m", `Sync de ${host}: ${files}`], { timeout: gitTimeoutMs });
       if (commit.code !== 0) {

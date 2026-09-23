@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { importExtension, loadExtension, makeCtx } from "./harness.mjs";
@@ -118,4 +118,32 @@ test("/update-pi instala e recarrega somente depois da suíte verde", async () =
   assert.match(bashCalls[0][1], /run-tests\.sh$/);
   assert.match(bashCalls[1][1], /install-pi-config\.sh$/);
   assert.equal(reloads, 1);
+});
+
+test("/sync-pi mantém o primeiro caractere do arquivo na mensagem de commit", async () => {
+  const oldHome = process.env.HOME;
+  const home = mkdtempSync(join(tmpdir(), "pi-sync-msg-home-"));
+  const repo = mkdtempSync(join(tmpdir(), "pi-sync-msg-repo-"));
+  process.env.HOME = home;
+  try {
+    mkdirSync(join(home, ".pi", "agent", "prompts"), { recursive: true });
+    let statusCalls = 0;
+    const calls = [];
+    const exec = async (command, args) => {
+      calls.push([command, ...args]);
+      if (command === "git" && args[2] === "status") {
+        statusCalls++;
+        return statusCalls === 1 ? ok("") : ok(" M settings.json\n M prompts/debug.md\n");
+      }
+      return ok();
+    };
+
+    const ext = await loadExtension("update-pi.ts", { exec });
+    await ext.commands["sync-pi"](repo, makeCtx({ ui: { notify: () => {} } }));
+
+    const commit = calls.find((call) => call[0] === "git" && call[3] === "commit");
+    assert.equal(commit.at(-1), `Sync de ${hostname() || "local"}: settings.json, prompts/debug.md`);
+  } finally {
+    process.env.HOME = oldHome;
+  }
 });
