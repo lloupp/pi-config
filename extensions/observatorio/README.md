@@ -24,37 +24,28 @@ No pi interativo:
 
 O painel pode ficar aberto enquanto o agente trabalha. Esc dentro do painel fecha
 apenas o painel; para interromper o agente, feche o painel e use o comando normal
-do pi. No Termux, use as teclas extras para setas/Esc; `q`, `r` e `v` também são
-teclas comuns do teclado Android.
+do pi.
 
 Legenda: `○` arquivo, `◇` ferramenta, `!` falha, `✦` seleção. Verde indica arquivo
 com alteração bem-sucedida; amarelo indica execução em andamento. As linhas ligam
-chamadas recentes: **não são dependências entre arquivos**. O ponto em movimento
-é um efeito visual, não telemetria de rede ou de progresso interno do modelo.
+chamadas recentes: **não são dependências entre arquivos**. Um cometa percorre esse
+rastro, da chamada mais antiga para a mais nova; a estrela da última chamada pulsa
+(`✧`) e o céu cintila. Tudo isso é efeito visual, não telemetria de rede nem de
+progresso interno do modelo.
 
-## Levar do Termux para um PC Linux
+## Instalar
 
-Copie **esta pasta inteira**, incluindo `index.ts`, `model.ts` e `view.ts`, para:
+Vem com o `install-pi-config.sh`. Depois execute `/reload` e `/observatorio`.
+Não precisa de bibliotecas, credenciais nem mudanças no `settings.json`. Os imports
+são resolvidos pelo próprio pi; não execute `node index.ts` diretamente.
 
-```
-~/.pi/agent/extensions/observatorio/
-```
-
-Depois execute `/reload` e `/observatorio` no pi do PC. Não precisa instalar
-bibliotecas para a extensão, copiar credenciais nem alterar `settings.json`.
-Se já existir uma pasta `observatorio` no destino, preserve-a antes de substituir.
-
-Requer Node.js compatível com seu pi e o pacote
-`@earendil-works/pi-coding-agent` com as APIs de extensões da versão **0.85.1**.
-Os imports são resolvidos pelo próprio pi. Não executar `node index.ts` diretamente.
-O código não contém caminhos do Termux nem usa APIs Android. A validação inicial
-foi feita no Termux/Android; execução em um PC Linux separado ainda não foi testada.
-Distribuições antigas com outro nome de pacote/API não são garantidas.
+Verificado no pi 0.87.1, num terminal Linux de 140x42 (tmux). O painel ocupa a tela
+inteira: quanto maior o terminal, maior o mapa.
 
 ## O que é medido (e o que não é)
 
 - Mostra até as **1.000 chamadas mais recentes** do ramo atual. O mapa desenha até
-  32 estrelas, as usadas por último, menos em telas pequenas; todas continuam
+  64 estrelas, as usadas por último, menos em terminais pequenos; todas continuam
   acessíveis pelas setas. Arquivos da mesma pasta ficam próximos, como uma
   constelação, com o nome da pasta em tom apagado; ferramentas sem caminho formam o
   grupo `ferramentas`. Um nome que não cabe sem cobrir estrelas ou outro nome é
@@ -82,7 +73,7 @@ histórico que o pi já possui. Não exibe argumentos de shell, saídas ou texto
 conversa. **Nomes de caminhos aparecem no painel**: evite compartilhá-lo se forem
 sensíveis. A extensão não remove informações já armazenadas pelo próprio pi.
 
-Animação limitada a 5 quadros/s, somente com o painel aberto; pausa e fechamento
+Animação limitada a 10 quadros/s, somente com o painel aberto; pausa e fechamento
 encerram o timer. Sem substituir editor, tema ou rodapé de outras extensões: usa
 apenas um pequeno indicador próprio de status. O painel é exclusivo do modo TUI;
 print/JSON/RPC não tentam desenhá-lo.

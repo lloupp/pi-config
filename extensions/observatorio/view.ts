@@ -43,13 +43,13 @@ export class ObservatoryView {
     this.stopTimer = undefined;
     if (this.paused || this.disposed) return;
     const schedule = this.options.schedule ?? ((tick: () => void) => {
-      const timer = setInterval(tick, 200);
+      const timer = setInterval(tick, 100);
       return () => clearInterval(timer);
     });
     this.stopTimer = schedule(() => {
       if (this.disposed || this.paused) return;
       this.frame++;
-      if (this.replay && this.frame % 2 === 0) {
+      if (this.replay && this.frame % 4 === 0) {
         this.cursor = Math.min(this.cursor + 1, this.replay.length);
         this.selectedKey = undefined;
         if (this.cursor === this.replay.length) {
@@ -115,7 +115,7 @@ export class ObservatoryView {
 
   render(width: number): string[] {
     const height = Math.max(1, this.options.height());
-    const w = Math.max(0, Math.min(width, 104));
+    const w = Math.max(0, width);
     const th = this.options.theme;
     if (w < 6 || height < 8) return [truncateToWidth("Observatório · Esc sai", w)];
     const inner = w - 4;
@@ -136,8 +136,9 @@ export class ObservatoryView {
     content.push(row(th.bold(styled("accent", "OBSERVATÓRIO")) + styled("muted", `  ${mode} ${badge}`)));
     content.push(row(`${stars.filter(star => star.file).length} arquivos · ${calls.length} chamadas · ` + styled(failed ? "error" : "success", `${failed} falhas`)));
 
-    // Smaller phones get a compact map; very short terminals keep the controls.
-    const mapHeight = Math.max(0, Math.min(15, height - 14));
+    // The map takes all the height left by the header and the details; very short
+    // terminals still keep the controls.
+    const mapHeight = Math.max(0, height - 14);
     if (mapHeight >= 3 && inner >= 12) {
       const grid: Cell[][] = Array.from({ length: mapHeight }, () => Array.from({ length: inner }, () => ({ char: " ", color: "dim" as Color })));
       const put = (x: number, y: number, char: string, color: Color) => {
@@ -145,12 +146,14 @@ export class ObservatoryView {
       };
       const center = { x: Math.floor(inner / 2), y: Math.floor(mapHeight / 2) };
       // Deterministic sky: resize never depends on Math.random().
+      // Each point twinkles in its own phase, derived from the same hash.
       for (let i = 0; i < Math.floor(inner * mapHeight / 26); i++) {
         const seed = hash(`sky:${i}`);
-        put(seed % inner, Math.floor(seed / inner) % mapHeight, "·", "dim");
+        const phase = (this.frame + seed % 40) % 40;
+        put(seed % inner, Math.floor(seed / inner) % mapHeight, phase < 30 ? "·" : phase < 34 ? "∙" : " ", "dim");
       }
       // Most recently used, not most recently discovered: an old file touched now must show.
-      const shown = [...stars].sort((a, b) => a.last - b.last).slice(-Math.min(32, Math.floor(inner * mapHeight / 6)));
+      const shown = [...stars].sort((a, b) => a.last - b.last).slice(-Math.min(64, Math.floor(inner * mapHeight / 6)));
       if (selected && !shown.includes(selected)) shown[0] = selected;
       const occupied = new Set([`${center.x}:${center.y}`]);
       const points = new Map<string, { x: number; y: number }>();
@@ -171,24 +174,33 @@ export class ObservatoryView {
         const name = dir === undefined ? "ferramentas" : dir === "." ? "./" : `${basename(dir)}/`;
         groups.set(name, [...groups.get(name) ?? [], { x, y }]);
       }
-      const line = (from: { x: number; y: number }, to: { x: number; y: number }, color: Color) => {
+      const line = (from: { x: number; y: number }, to: { x: number; y: number }, color: Color, path?: { x: number; y: number }[]) => {
         const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
         for (let step = 1; step < steps; step++) {
-          put(Math.round(from.x + (to.x - from.x) * step / steps), Math.round(from.y + (to.y - from.y) * step / steps), "·", color);
+          const cell = { x: Math.round(from.x + (to.x - from.x) * step / steps), y: Math.round(from.y + (to.y - from.y) * step / steps) };
+          put(cell.x, cell.y, "·", color);
+          path?.push(cell);
         }
       };
       let previous = center;
+      const trail: { x: number; y: number }[] = [];
       for (const call of calls.slice(-10)) {
         const point = points.get(`${call.file ? "file" : "tool"}:${call.target}`);
         if (point) {
-          line(previous, point, "dim");
+          line(previous, point, "dim", trail);
           previous = point;
         }
+      }
+      // A comet runs the trail of the recent calls, oldest to newest, in a loop.
+      if (trail.length) {
+        const head = this.frame % trail.length;
+        put(trail[head].x, trail[head].y, "•", "warning");
+        if (head > 0) put(trail[head - 1].x, trail[head - 1].y, "∙", "muted");
       }
       const target = selected && points.get(selected.key);
       if (target) {
         line(center, target, "accent");
-        const t = (this.frame % 12) / 12;
+        const t = (this.frame % 24) / 24;
         put(Math.round(center.x + (target.x - center.x) * t), Math.round(center.y + (target.y - center.y) * t), "•", "accent");
       }
       // Constellation names go under (or over) their group, never over a star or another name.
@@ -206,10 +218,16 @@ export class ObservatoryView {
         [...text].forEach((char, i) => put(x + i, y, char, "dim"));
       }
       put(center.x, center.y, "π", "accent");
+      const last = calls.at(-1);
+      const newest = last && `${last.file ? "file" : "tool"}:${last.target}`;
+      const blink = Math.floor(this.frame / 2) % 2 === 1;
+      const pulse = Math.floor(this.frame / 4) % 2 === 1;
       for (const star of shown) {
         const point = points.get(star.key)!;
         const color: Color = star.errors ? "error" : star.running ? "warning" : star === selected ? "accent" : star.changes ? "success" : "muted";
-        put(point.x, point.y, star === selected ? "✦" : star.errors ? "!" : star.running ? (this.frame % 2 ? "*" : "+") : star.file ? "○" : "◇", color);
+        const base = star.errors ? "!" : star.running ? (blink ? "*" : "+") : star.file ? "○" : "◇";
+        const pulsing = star.key === newest && star !== selected && !star.errors && !star.running && pulse;
+        put(point.x, point.y, star === selected ? "✦" : pulsing ? "✧" : base, pulsing ? "accent" : color);
       }
       for (const cells of grid) {
         let text = "";

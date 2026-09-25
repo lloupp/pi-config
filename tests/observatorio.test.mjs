@@ -149,3 +149,63 @@ test("constelações mostram o nome da pasta sem cobrir estrelas", () => {
     view.dispose();
   }
 });
+
+function animatedView(model, height = 40) {
+  const ctx = makeCtx();
+  let tick;
+  const view = new ObservatoryView(model, {
+    theme: ctx.ui.theme, height: () => height, redraw() {}, close() {},
+    schedule: (fn) => { tick = fn; return () => { tick = undefined; }; },
+  });
+  return { view, tick: () => tick?.() };
+}
+
+function sampleModel() {
+  const model = new Observatory("/project");
+  ["src/a.ts", "src/b.ts", "docs/guia.md", "tests/a.test.ts"].forEach((path, i) => {
+    model.start(String(i), i % 2 ? "edit" : "read", { path }, 0);
+    model.finish(String(i), i % 2 ? "edit" : "read", false, 0);
+  });
+  return model;
+}
+
+test("observatório usa a largura inteira do terminal", () => {
+  const { view } = animatedView(sampleModel());
+  try {
+    const widths = view.render(160).map(line => line.replace(/\x1b\[[0-9;]*m/g, "").length);
+    assert.equal(Math.max(...widths), 160);
+  } finally {
+    view.dispose();
+  }
+});
+
+test("animação muda a cada quadro e congela quando pausada", () => {
+  const { view, tick } = animatedView(sampleModel());
+  try {
+    const first = view.render(120).join("\n");
+    tick();
+    const second = view.render(120).join("\n");
+    assert.notEqual(second, first, "quadros consecutivos precisam diferir");
+    view.handleInput(" ");
+    const paused = view.render(120).join("\n");
+    tick();
+    assert.equal(view.render(120).join("\n"), paused, "pausado, o quadro não muda");
+  } finally {
+    view.dispose();
+  }
+});
+
+test("replay avança uma chamada a cada 4 quadros (400 ms a 10 quadros/s)", () => {
+  const { view, tick } = animatedView(sampleModel());
+  try {
+    view.handleInput("r");
+    const cursor = () => view.render(120).join("\n").match(/REPLAY (\d+)\//)[1];
+    assert.equal(cursor(), "1");
+    for (let i = 0; i < 3; i++) tick();
+    assert.equal(cursor(), "1");
+    tick();
+    assert.equal(cursor(), "2");
+  } finally {
+    view.dispose();
+  }
+});

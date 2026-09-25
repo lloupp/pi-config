@@ -20,7 +20,7 @@ removido.
     fora de repositório git.
   - [`observatorio`](extensions/observatorio/README.md) — `/observatorio` abre uma
     constelação dos arquivos e ferramentas da sessão, com falhas em destaque e replay
-    visual sem reexecutar nada. Layout adaptável ao Termux e ao Linux, sem IA extra.
+    visual sem reexecutar nada. Animação em tela cheia no terminal, sem IA extra.
   - [`lightpanda`](extensions/lightpanda.md) — `browser_open` renderiza páginas que
     dependem de JavaScript, e `browser_start`/`click`/`fill`/`close` interagem com elas
     mantendo a sessão. O `web_fetch` só lê HTML estático. Exige o binário do Lightpanda;
