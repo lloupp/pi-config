@@ -1,4 +1,4 @@
-import { dirname } from "node:path";
+import { basename, dirname } from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Observatory, starsFor, type Call, type Star } from "./model.ts";
@@ -154,9 +154,11 @@ export class ObservatoryView {
       if (selected && !shown.includes(selected)) shown[0] = selected;
       const occupied = new Set([`${center.x}:${center.y}`]);
       const points = new Map<string, { x: number; y: number }>();
+      const groups = new Map<string, { x: number; y: number }[]>();
       for (const star of shown) {
         // Files of the same folder gather around one point, like a constellation; tools share another.
-        const group = hash(star.file ? `dir:${dirname(star.label)}` : "tools");
+        const dir = star.file ? dirname(star.label) : undefined;
+        const group = hash(dir === undefined ? "tools" : `dir:${dir}`);
         const seed = hash(star.key);
         let x = Math.max(0, Math.min(inner - 1, 4 + group % Math.max(1, inner - 8) + seed % 9 - 4));
         let y = Math.max(0, Math.min(mapHeight - 1, 1 + Math.floor(group / inner) % Math.max(1, mapHeight - 2) + Math.floor(seed / 9) % 3 - 1));
@@ -166,6 +168,8 @@ export class ObservatoryView {
         }
         occupied.add(`${x}:${y}`);
         points.set(star.key, { x, y });
+        const name = dir === undefined ? "ferramentas" : dir === "." ? "./" : `${basename(dir)}/`;
+        groups.set(name, [...groups.get(name) ?? [], { x, y }]);
       }
       const line = (from: { x: number; y: number }, to: { x: number; y: number }, color: Color) => {
         const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
@@ -186,6 +190,20 @@ export class ObservatoryView {
         line(center, target, "accent");
         const t = (this.frame % 12) / 12;
         put(Math.round(center.x + (target.x - center.x) * t), Math.round(center.y + (target.y - center.y) * t), "•", "accent");
+      }
+      // Constellation names go under (or over) their group, never over a star or another name.
+      const named = new Set<string>();
+      for (const [name, members] of groups) {
+        const text = name.slice(0, 16);
+        if ([...text].some(char => visibleWidth(char) !== 1)) continue;
+        const ys = members.map(point => point.y);
+        const y = Math.max(...ys) + 1 < mapHeight ? Math.max(...ys) + 1 : Math.min(...ys) - 1;
+        const middle = members.reduce((sum, point) => sum + point.x, 0) / members.length;
+        const x = Math.max(0, Math.min(inner - text.length, Math.round(middle - text.length / 2)));
+        const cells = [...text].map((_, i) => `${x + i}:${y}`);
+        if (y < 0 || text.length > inner || cells.some(cell => occupied.has(cell) || named.has(cell))) continue;
+        cells.forEach(cell => named.add(cell));
+        [...text].forEach((char, i) => put(x + i, y, char, "dim"));
       }
       put(center.x, center.y, "π", "accent");
       for (const star of shown) {

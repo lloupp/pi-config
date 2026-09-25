@@ -130,3 +130,22 @@ test("detalhe mostra as últimas três chamadas da estrela, da mais nova para a 
     view.dispose();
   }
 });
+
+test("constelações mostram o nome da pasta sem cobrir estrelas", () => {
+  const model = new Observatory("/project");
+  ["src/a.ts", "src/b.ts", "docs/guia.md", "docs/faq.md"].forEach((path, i) => {
+    model.start(String(i), "read", { path }, 0);
+    model.finish(String(i), "read", false, 0);
+  });
+  model.start("x", "bash", {}, 0);
+  const ctx = makeCtx();
+  const view = new ObservatoryView(model, { theme: ctx.ui.theme, height: () => 30, redraw() {}, close() {}, schedule: () => () => {} });
+  try {
+    const lines = view.render(80).map(line => line.replace(/\x1b\[[0-9;]*m/g, ""));
+    const map = lines.slice(3, lines.findIndex(line => /✦ \d+\/\d+/.test(line))).join("\n");
+    for (const name of ["src/", "docs/", "ferramentas"]) assert.ok(map.includes(name), `${name} no mapa`);
+    assert.equal((map.match(/○/g) ?? []).length, 4, "as quatro estrelas de arquivo continuam visíveis");
+  } finally {
+    view.dispose();
+  }
+});

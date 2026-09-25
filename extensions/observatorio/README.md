@@ -56,8 +56,9 @@ Distribuições antigas com outro nome de pacote/API não são garantidas.
 - Mostra até as **1.000 chamadas mais recentes** do ramo atual. O mapa desenha até
   32 estrelas, as usadas por último, menos em telas pequenas; todas continuam
   acessíveis pelas setas. Arquivos da mesma pasta ficam próximos, como uma
-  constelação; ferramentas sem caminho formam outro grupo. A posição não tem outro
-  significado.
+  constelação, com o nome da pasta em tom apagado; ferramentas sem caminho formam o
+  grupo `ferramentas`. Um nome que não cabe sem cobrir estrelas ou outro nome é
+  omitido. A posição não tem outro significado.
 - A estrela selecionada mostra suas três últimas chamadas, da mais nova para a mais velha.
 - `read`, `edit` e `write` com `path` são agrupados pelo caminho normalizado.
   Outros tools aparecem pelo nome. Não tenta adivinhar arquivos dentro de shell,
