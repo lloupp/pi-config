@@ -75,6 +75,48 @@ test("--global preserva o layout ~/.pi/agent", () => {
   assert.ok(existsSync(join(agent, "prompts", "debug.md")));
 });
 
+test("--global remove o tema termux-neon antigo e preserva outros temas e settings", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-global-theme-"));
+  const agent = join(home, ".pi", "agent");
+  const themes = join(agent, "themes");
+  mkdirSync(themes, { recursive: true });
+  writeFileSync(join(themes, "termux-neon.json"), "{}\n");
+  writeFileSync(join(themes, "termux-neon.md"), "# tema\n");
+  writeFileSync(join(themes, "meu-tema.json"), "{}\n");
+  writeFileSync(join(agent, "settings.json"), JSON.stringify({ defaultModel: "x", theme: "termux-neon", packages: ["a"] }, null, 2));
+
+  runInstall(["--global", repoRoot], { home });
+
+  assert.equal(existsSync(join(themes, "termux-neon.json")), false);
+  assert.equal(existsSync(join(themes, "termux-neon.md")), false);
+  assert.ok(existsSync(join(themes, "meu-tema.json")));
+  assert.deepEqual(JSON.parse(readFileSync(join(agent, "settings.json"), "utf8")), { defaultModel: "x", packages: ["a"] });
+  assert.equal(readdirSync(agent).some((name) => name.includes(".tmp.")), false);
+});
+
+test("--global não toca settings.json com outro tema", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-global-theme-other-"));
+  const agent = join(home, ".pi", "agent");
+  mkdirSync(agent, { recursive: true });
+  const settings = '{"theme":"light"}';
+  writeFileSync(join(agent, "settings.json"), settings);
+
+  runInstall(["--global", repoRoot], { home });
+
+  assert.equal(readFileSync(join(agent, "settings.json"), "utf8"), settings);
+});
+
+test("--global remove a pasta themes quando só tinha o termux-neon", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-global-theme-empty-"));
+  const themes = join(home, ".pi", "agent", "themes");
+  mkdirSync(themes, { recursive: true });
+  writeFileSync(join(themes, "termux-neon.json"), "{}\n");
+
+  runInstall(["--global", repoRoot], { home });
+
+  assert.equal(existsSync(themes), false);
+});
+
 test("--global com origem igual a ~/.pi/agent é idempotente e não apaga dados", () => {
   const home = mkdtempSync(join(tmpdir(), "pi-global-self-"));
   const agent = join(home, ".pi", "agent");
@@ -92,4 +134,36 @@ test("--global com origem igual a ~/.pi/agent é idempotente e não apaga dados"
   assert.ok(existsSync(join(agent, "extensions", "x.ts")));
   assert.ok(existsSync(join(agent, "skills", "x.md")));
   assert.ok(existsSync(join(agent, "prompts", "x.md")));
+});
+
+test("--project guarda o AGENTS.md próprio do projeto em AGENTS.md.bak", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-bak-"));
+  writeFileSync(join(project, "AGENTS.md"), "# regras do projeto\n");
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(readFileSync(join(project, "AGENTS.md.bak"), "utf8"), "# regras do projeto\n");
+  assert.equal(readFileSync(join(project, "AGENTS.md"), "utf8"), readFileSync(join(repoRoot, "AGENTS.md"), "utf8"));
+});
+
+test("--project não cria backup quando o AGENTS.md já é igual à origem", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-same-"));
+  writeFileSync(join(project, "AGENTS.md"), readFileSync(join(repoRoot, "AGENTS.md"), "utf8"));
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(existsSync(join(project, "AGENTS.md.bak")), false);
+});
+
+test("--project não sobrescreve um AGENTS.md.bak existente", () => {
+  const project = mkdtempSync(join(tmpdir(), "pi-project-agents-bak2-"));
+  writeFileSync(join(project, "AGENTS.md"), "# versão nova do projeto\n");
+  writeFileSync(join(project, "AGENTS.md.bak"), "# backup antigo\n");
+
+  runInstall(["--project", repoRoot], { cwd: project });
+
+  assert.equal(readFileSync(join(project, "AGENTS.md.bak"), "utf8"), "# backup antigo\n");
+  const extra = readdirSync(project).filter((name) => /^AGENTS\.md\.bak\.\d+$/.test(name));
+  assert.equal(extra.length, 1);
+  assert.equal(readFileSync(join(project, extra[0]), "utf8"), "# versão nova do projeto\n");
 });

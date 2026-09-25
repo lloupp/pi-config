@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { importExtension, loadExtension, makeCtx } from "./harness.mjs";
@@ -59,14 +59,12 @@ test("/sync-pi espelha diretório e não ressuscita arquivo removido", async () 
 test("/update-pi não instala quando a suíte falha", async () => {
   const repo = "/tmp/pi-config-update-fail";
   const calls = [];
-  let revParseCalls = 0;
   let reloads = 0;
   const avisos = [];
 
   const exec = async (command, args) => {
     calls.push([command, ...args]);
     if (command === "git" && args[2] === "status") return ok("");
-    if (command === "git" && args[2] === "rev-parse") return ok(++revParseCalls === 1 ? "aaa\n" : "bbb\n");
     if (command === "git" && args[2] === "pull") return ok("updated\n");
     if (command === "git" && args[2] === "log") return ok("bbb corrige algo\n");
     if (command === "bash" && args[0].endsWith("run-tests.sh")) {
@@ -93,13 +91,11 @@ test("/update-pi não instala quando a suíte falha", async () => {
 test("/update-pi instala e recarrega somente depois da suíte verde", async () => {
   const repo = "/tmp/pi-config-update-pass";
   const calls = [];
-  let revParseCalls = 0;
   let reloads = 0;
 
   const exec = async (command, args) => {
     calls.push([command, ...args]);
     if (command === "git" && args[2] === "status") return ok("");
-    if (command === "git" && args[2] === "rev-parse") return ok(++revParseCalls === 1 ? "aaa\n" : "bbb\n");
     if (command === "git" && args[2] === "pull") return ok("updated\n");
     if (command === "git" && args[2] === "log") return ok("bbb corrige algo\n");
     if (command === "bash" && args[0].endsWith("run-tests.sh")) return ok("todos verdes\n");
@@ -118,4 +114,49 @@ test("/update-pi instala e recarrega somente depois da suíte verde", async () =
   assert.match(bashCalls[0][1], /run-tests\.sh$/);
   assert.match(bashCalls[1][1], /install-pi-config\.sh$/);
   assert.equal(reloads, 1);
+});
+
+test("/sync-pi mantém o primeiro caractere do arquivo na mensagem de commit", async () => {
+  const oldHome = process.env.HOME;
+  const home = mkdtempSync(join(tmpdir(), "pi-sync-msg-home-"));
+  const repo = mkdtempSync(join(tmpdir(), "pi-sync-msg-repo-"));
+  process.env.HOME = home;
+  try {
+    mkdirSync(join(home, ".pi", "agent", "prompts"), { recursive: true });
+    let statusCalls = 0;
+    const calls = [];
+    const exec = async (command, args) => {
+      calls.push([command, ...args]);
+      if (command === "git" && args[2] === "status") {
+        statusCalls++;
+        return statusCalls === 1 ? ok("") : ok(" M settings.json\n M prompts/debug.md\n");
+      }
+      return ok();
+    };
+
+    const ext = await loadExtension("update-pi.ts", { exec });
+    await ext.commands["sync-pi"](repo, makeCtx({ ui: { notify: () => {} } }));
+
+    const commit = calls.find((call) => call[0] === "git" && call[3] === "commit");
+    assert.equal(commit.at(-1), `Sync de ${hostname() || "local"}: settings.json, prompts/debug.md`);
+  } finally {
+    process.env.HOME = oldHome;
+  }
+});
+
+test("/update-pi cancelado não aplica o pull", async () => {
+  const calls = [];
+  const exec = async (command, args) => {
+    calls.push([command, ...args]);
+    if (command === "git" && args[2] === "status") return ok("");
+    if (command === "git" && args[2] === "log") return ok("bbb corrige algo\n");
+    return ok();
+  };
+
+  const ext = await loadExtension("update-pi.ts", { exec });
+  const ctx = makeCtx({ ui: { notify: () => {}, confirm: async () => false } });
+  await ext.commands["update-pi"]("/tmp/pi-config-update-cancel", ctx);
+
+  assert.equal(calls.some((call) => call[0] === "git" && call[3] === "pull"), false, "pull não deve rodar");
+  assert.equal(calls.some((call) => call[0] === "bash"), false);
 });

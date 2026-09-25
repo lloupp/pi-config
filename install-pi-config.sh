@@ -133,6 +133,29 @@ case "$MODE" in
     mirror_dir "$SRC_DIR/prompts" "$DEST_DIR/prompts" "prompts"
     mirror_dir "$SRC_DIR/skills" "$DEST_DIR/skills" "skills"
     mirror_dir "$SRC_DIR/extensions" "$DEST_DIR/extensions" "extensions"
+
+    # Versões antigas instalavam o tema termux-neon. Remove só os arquivos dele; outros
+    # temas do usuário ficam. No settings.json, remove a chave "theme" apenas se ela
+    # ainda for termux-neon, para o pi voltar ao tema detectado; o resto não é tocado.
+    rm -f -- "$DEST_DIR/themes/termux-neon.json" "$DEST_DIR/themes/termux-neon.md"
+    rmdir -- "$DEST_DIR/themes" 2>/dev/null || true
+    SETTINGS="$DEST_DIR/settings.json"
+    if grep -q '"theme"[[:space:]]*:[[:space:]]*"termux-neon"' "$SETTINGS" 2>/dev/null; then
+      if node -e '
+        const fs = require("fs");
+        const [file, tmp] = process.argv.slice(1);
+        const settings = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
+        if (settings.theme !== "termux-neon") process.exit(0);
+        delete settings.theme;
+        fs.writeFileSync(tmp, JSON.stringify(settings, null, 2) + "\n", { mode: fs.statSync(file).mode });
+        fs.renameSync(tmp, file);
+      ' "$SETTINGS" "$SETTINGS.tmp.$$" 2>/dev/null; then
+        echo "  ✓ tema termux-neon removido do settings.json"
+      else
+        rm -f -- "$SETTINGS.tmp.$$"
+        echo "  ! não foi possível editar settings.json; remova a chave \"theme\" à mão." >&2
+      fi
+    fi
     ;;
 
   --project|project)
@@ -144,6 +167,14 @@ case "$MODE" in
     # O DefaultResourceLoader do Pi procura contexto em <projeto>/AGENTS.md e os demais
     # recursos em <projeto>/.pi/{prompts,skills,extensions}. `.pi/agent` não é um local
     # de descoberta de recursos de projeto.
+    # O AGENTS.md na raiz costuma ser do próprio projeto: guarda uma cópia antes de
+    # sobrescrever, sem nunca apagar um backup anterior.
+    if [[ -f "$PROJECT_ROOT/AGENTS.md" ]] && ! cmp -s "$SRC_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md"; then
+      BACKUP="$PROJECT_ROOT/AGENTS.md.bak"
+      [[ ! -e "$BACKUP" ]] || BACKUP="$BACKUP.$(date +%Y%m%d%H%M%S)"
+      cp -p -- "$PROJECT_ROOT/AGENTS.md" "$BACKUP"
+      echo "  ! AGENTS.md do projeto salvo em $(basename "$BACKUP")" >&2
+    fi
     copy_file "$SRC_DIR/AGENTS.md" "$PROJECT_ROOT/AGENTS.md" "AGENTS.md"
     mirror_dir "$SRC_DIR/prompts" "$PI_DIR/prompts" ".pi/prompts"
     mirror_dir "$SRC_DIR/skills" "$PI_DIR/skills" ".pi/skills"

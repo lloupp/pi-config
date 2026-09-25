@@ -110,31 +110,33 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const before = await pi.exec("git", ["-C", repo, "rev-parse", "HEAD"], { timeout: gitTimeoutMs });
+      // Fetch e confirmação ANTES do pull: cancelar não pode deixar o repo à frente do que
+      // está instalado, senão o aviso de atualização do início da sessão some para sempre.
+      const fetch = await pi.exec("git", ["-C", repo, "fetch", "--quiet"], { timeout: gitTimeoutMs });
+      if (fetch.code !== 0) {
+        ctx.ui.notify(`git fetch falhou:\n${(fetch.stderr || fetch.stdout).trim()}`, "error");
+        return;
+      }
+      const log = await pi.exec("git", ["-C", repo, "log", "--oneline", "HEAD..@{u}"], { timeout: gitTimeoutMs });
+      const newCommits = log.code === 0 && log.stdout.trim() ? `commits novos:\n${log.stdout.trim()}` : "já estava atualizado";
+
+      // Tanto a suíte quanto o instalador vêm do remoto e executam código.
+      // O usuário confirma UMA vez, vendo os commits, antes de qualquer execução deles.
+      if (ctx.hasUI) {
+        const ok = await ctx.ui.confirm(
+          "Atualizar, validar e instalar o pi-config?",
+          `Vai fazer git pull em ${repo}, executar run-tests.sh e, somente se tudo passar, install-pi-config.sh para sobrescrever ~/.pi/agent.\n\n${newCommits}\n\nContinuar?`,
+        );
+        if (!ok) {
+          ctx.ui.notify("Atualização cancelada. Nada foi alterado.", "info");
+          return;
+        }
+      }
+
       const pull = await pi.exec("git", ["-C", repo, "pull", "--ff-only"], { timeout: gitTimeoutMs });
       if (pull.code !== 0) {
         ctx.ui.notify(`git pull falhou:\n${(pull.stderr || pull.stdout).trim()}`, "error");
         return;
-      }
-
-      const after = await pi.exec("git", ["-C", repo, "rev-parse", "HEAD"], { timeout: gitTimeoutMs });
-      let newCommits = "já estava atualizado";
-      if (before.stdout.trim() !== after.stdout.trim()) {
-        const log = await pi.exec("git", ["-C", repo, "log", "--oneline", `${before.stdout.trim()}..HEAD`], { timeout: gitTimeoutMs });
-        newCommits = `commits novos:\n${log.stdout.trim()}`;
-      }
-
-      // Tanto a suíte quanto o instalador acabaram de chegar do remoto e executam código.
-      // O usuário confirma UMA vez, vendo os commits, antes de qualquer execução deles.
-      if (ctx.hasUI) {
-        const ok = await ctx.ui.confirm(
-          "Validar e instalar o pi-config atualizado?",
-          `Vai executar run-tests.sh de ${repo} e, somente se tudo passar, install-pi-config.sh para sobrescrever ~/.pi/agent.\n\n${newCommits}\n\nContinuar?`,
-        );
-        if (!ok) {
-          ctx.ui.notify("Validação/instalação cancelada. O git pull já foi aplicado ao repo.", "info");
-          return;
-        }
       }
 
       const tests = await pi.exec("bash", [path.join(repo, "run-tests.sh")], { timeout: testTimeoutMs });
@@ -200,7 +202,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const host = os.hostname() || "local";
-      const files = changed.stdout.trim().split("\n").map((l) => l.slice(3)).slice(0, 8).join(", ");
+      const files = changed.stdout.trimEnd().split("\n").map((l) => l.slice(3)).slice(0, 8).join(", ");
       await pi.exec("git", ["-C", repo, "add", "-A"], { timeout: gitTimeoutMs });
       const commit = await pi.exec("git", ["-C", repo, "commit", "-m", `Sync de ${host}: ${files}`], { timeout: gitTimeoutMs });
       if (commit.code !== 0) {

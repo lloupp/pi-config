@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile, writeFile, unlink } from "node:fs/promises";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { extname, isAbsolute, join } from "node:path";
+import { basename, extname, isAbsolute, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 
 const maxFileBytes = 512_000;
@@ -70,8 +70,11 @@ export default function (pi: ExtensionAPI) {
   // sintaxe válida que exige lowering (enum, namespace, parameter properties), sem rodar
   // o módulo editado nem exigir um compilador TypeScript separado.
   async function checkTypeScript(absPath: string): Promise<string | undefined> {
+    // Node sem a API (anterior ao 22.13) pula a verificação: acusar erro aqui faria o
+    // agente "corrigir" um arquivo válido.
     const script = [
       'const { stripTypeScriptTypes } = require("node:module")',
+      'if (typeof stripTypeScriptTypes !== "function") process.exit(0)',
       'const { readFileSync } = require("node:fs")',
       'stripTypeScriptTypes(readFileSync(process.argv[1], "utf8"), { mode: "transform" })',
     ].join(";");
@@ -108,6 +111,12 @@ export default function (pi: ExtensionAPI) {
     return checkCommand("python3", ["-c", script, absPath]);
   }
 
+  // Arquivos que por convenção aceitam comentários e vírgula final (JSONC): JSON.parse os
+  // acusaria como inválidos.
+  function isJsonc(absPath: string): boolean {
+    return /(^|[\\/])\.vscode[\\/]/.test(absPath) || /^(tsconfig|jsconfig)(\..+)?\.json$/i.test(basename(absPath));
+  }
+
   async function runCheck(absPath: string): Promise<string | undefined> {
     if (absPath.endsWith("SKILL.md")) return checkSkillFrontmatter(absPath);
     const ext = extname(absPath).toLowerCase();
@@ -126,7 +135,7 @@ export default function (pi: ExtensionAPI) {
       case ".bash":
         return checkCommand("bash", ["-n", absPath]);
       case ".json":
-        return checkJson(absPath);
+        return isJsonc(absPath) ? undefined : checkJson(absPath);
       default:
         return undefined;
     }
