@@ -93,3 +93,40 @@ test("observatório adapta a tela estreita e encerra timers ao pausar ou fechar"
     view.dispose();
   }
 });
+
+test("mapa mostra as estrelas usadas por último, não as vistas por último", () => {
+  const model = new Observatory("/project");
+  for (let i = 0; i < 40; i++) {
+    model.start(String(i), "read", { path: `f${i}.ts` }, 0);
+    model.finish(String(i), "read", false, 0);
+  }
+  model.start("old", "edit", { path: "f0.ts" }, 0);
+  model.finish("old", "edit", true, 0);
+  const ctx = makeCtx();
+  const view = new ObservatoryView(model, { theme: ctx.ui.theme, height: () => 22, redraw() {}, close() {}, schedule: () => () => {} });
+  try {
+    view.handleInput("\x1b[A"); // seleciona outra estrela para f0 não entrar só por estar selecionado
+    const lines = view.render(40);
+    const map = lines.slice(3, lines.findIndex(line => /✦ \d+\/\d+/.test(line))).join("\n");
+    assert.match(map, /!/, "f0.ts, com falha recente, precisa aparecer no mapa");
+  } finally {
+    view.dispose();
+  }
+});
+
+test("detalhe mostra as últimas três chamadas da estrela, da mais nova para a mais velha", () => {
+  const model = new Observatory("/project");
+  ["read", "edit", "read", "write"].forEach((tool, i) => {
+    model.start(String(i), tool, { path: "app.ts" }, i * 10);
+    model.finish(String(i), tool, tool === "edit", i * 10 + 5);
+  });
+  const ctx = makeCtx();
+  const view = new ObservatoryView(model, { theme: ctx.ui.theme, height: () => 30, redraw() {}, close() {}, schedule: () => () => {} });
+  try {
+    const text = view.render(80).join("\n");
+    assert.match(text, /write: concluída · 5 ms[\s\S]*read: concluída · 5 ms[\s\S]*edit: falhou · 5 ms/);
+    assert.equal((text.match(/: (concluída|falhou) · /g) ?? []).length, 3);
+  } finally {
+    view.dispose();
+  }
+});

@@ -19,6 +19,8 @@ export interface Star {
   changes: number;
   errors: number;
   running: number;
+  /** Index in `calls` of the star's most recent call. */
+  last: number;
 }
 export const MAX_CALLS = 1000;
 
@@ -106,14 +108,15 @@ export class Observatory {
 
 export function starsFor(calls: readonly Call[]): Star[] {
   const stars = new Map<string, Star>();
-  for (const call of calls) {
+  for (const [index, call] of calls.entries()) {
     const key = `${call.file ? "file" : "tool"}:${call.target}`;
     let star = stars.get(key);
     if (!star) {
-      star = { key, label: call.target, file: call.file, calls: [], reads: 0, changes: 0, errors: 0, running: 0 };
+      star = { key, label: call.target, file: call.file, calls: [], reads: 0, changes: 0, errors: 0, running: 0, last: index };
       stars.set(key, star);
     }
     star.calls.push(call);
+    star.last = index;
     if (call.tool === "read") star.reads++;
     if ((call.tool === "edit" || call.tool === "write") && call.outcome === "success") star.changes++;
     if (call.outcome === "error") star.errors++;

@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Observatory, starsFor, type Call, type Star } from "./model.ts";
@@ -136,7 +137,7 @@ export class ObservatoryView {
     content.push(row(`${stars.filter(star => star.file).length} arquivos · ${calls.length} chamadas · ` + styled(failed ? "error" : "success", `${failed} falhas`)));
 
     // Smaller phones get a compact map; very short terminals keep the controls.
-    const mapHeight = Math.max(0, Math.min(15, height - 12));
+    const mapHeight = Math.max(0, Math.min(15, height - 14));
     if (mapHeight >= 3 && inner >= 12) {
       const grid: Cell[][] = Array.from({ length: mapHeight }, () => Array.from({ length: inner }, () => ({ char: " ", color: "dim" as Color })));
       const put = (x: number, y: number, char: string, color: Color) => {
@@ -148,14 +149,17 @@ export class ObservatoryView {
         const seed = hash(`sky:${i}`);
         put(seed % inner, Math.floor(seed / inner) % mapHeight, "·", "dim");
       }
-      const shown = stars.slice(-Math.min(32, Math.floor(inner * mapHeight / 6)));
+      // Most recently used, not most recently discovered: an old file touched now must show.
+      const shown = [...stars].sort((a, b) => a.last - b.last).slice(-Math.min(32, Math.floor(inner * mapHeight / 6)));
       if (selected && !shown.includes(selected)) shown[0] = selected;
       const occupied = new Set([`${center.x}:${center.y}`]);
       const points = new Map<string, { x: number; y: number }>();
       for (const star of shown) {
+        // Files of the same folder gather around one point, like a constellation; tools share another.
+        const group = hash(star.file ? `dir:${dirname(star.label)}` : "tools");
         const seed = hash(star.key);
-        let x = seed % inner;
-        let y = Math.floor(seed / inner) % mapHeight;
+        let x = Math.max(0, Math.min(inner - 1, 4 + group % Math.max(1, inner - 8) + seed % 9 - 4));
+        let y = Math.max(0, Math.min(mapHeight - 1, 1 + Math.floor(group / inner) % Math.max(1, mapHeight - 2) + Math.floor(seed / 9) % 3 - 1));
         while (occupied.has(`${x}:${y}`)) {
           x = (x + 1) % inner;
           if (x === 0) y = (y + 1) % mapHeight;
@@ -202,16 +206,21 @@ export class ObservatoryView {
     }
 
     if (selected) {
-      const last = selected.calls.at(-1)!;
       content.push(row(styled("accent", `✦ ${this.selection(stars) + 1}/${stars.length} `) + selected.label));
       content.push(row(selected.file
         ? `${selected.reads} leituras tentadas · ${selected.changes} alterações OK · ${selected.errors} falhas`
         : `${selected.calls.length} chamadas · ${selected.errors} falhas (argumentos ocultos)`));
-      content.push(row(`${last.tool}: ${statusText(last)} · ${last.durationMs === undefined ? "duração indisponível" : `${last.durationMs} ms`}`));
+      const recent = selected.calls.slice(-3).reverse();
+      for (let i = 0; i < 3; i++) {
+        const call = recent[i];
+        content.push(row(call ? styled(i ? "muted" : "text", `${call.tool}: ${statusText(call)} · ${call.durationMs === undefined ? "duração indisponível" : `${call.durationMs} ms`}`) : ""));
+      }
     } else {
       content.push(row(styled("accent", "O céu ainda está vazio.")));
       content.push(row("Use o pi: cada arquivo acessado vira uma estrela."));
       content.push(row("Só observação. Nenhuma ferramenta é reexecutada."));
+      content.push(row(""));
+      content.push(row(""));
     }
     const progress = this.replay ? this.cursor / Math.max(1, this.replay.length) : 1;
     const barWidth = Math.max(1, Math.min(inner - 8, 40));
