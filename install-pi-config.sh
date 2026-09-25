@@ -135,12 +135,26 @@ case "$MODE" in
     mirror_dir "$SRC_DIR/extensions" "$DEST_DIR/extensions" "extensions"
 
     # Versões antigas instalavam o tema termux-neon. Remove só os arquivos dele; outros
-    # temas do usuário ficam. O settings.json não é tocado: se ainda apontar para
-    # termux-neon, o pi cai no tema dark até a chave "theme" ser removida.
+    # temas do usuário ficam. No settings.json, remove a chave "theme" apenas se ela
+    # ainda for termux-neon, para o pi voltar ao tema detectado; o resto não é tocado.
     rm -f -- "$DEST_DIR/themes/termux-neon.json" "$DEST_DIR/themes/termux-neon.md"
     rmdir -- "$DEST_DIR/themes" 2>/dev/null || true
-    if grep -q '"theme"[[:space:]]*:[[:space:]]*"termux-neon"' "$DEST_DIR/settings.json" 2>/dev/null; then
-      echo "  ! settings.json ainda usa o tema termux-neon; remova a chave \"theme\" para voltar ao padrão." >&2
+    SETTINGS="$DEST_DIR/settings.json"
+    if grep -q '"theme"[[:space:]]*:[[:space:]]*"termux-neon"' "$SETTINGS" 2>/dev/null; then
+      if node -e '
+        const fs = require("fs");
+        const [file, tmp] = process.argv.slice(1);
+        const settings = JSON.parse(fs.readFileSync(file, "utf8").replace(/^﻿/, ""));
+        if (settings.theme !== "termux-neon") process.exit(0);
+        delete settings.theme;
+        fs.writeFileSync(tmp, JSON.stringify(settings, null, 2) + "\n", { mode: fs.statSync(file).mode });
+        fs.renameSync(tmp, file);
+      ' "$SETTINGS" "$SETTINGS.tmp.$$" 2>/dev/null; then
+        echo "  ✓ tema termux-neon removido do settings.json"
+      else
+        rm -f -- "$SETTINGS.tmp.$$"
+        echo "  ! não foi possível editar settings.json; remova a chave \"theme\" à mão." >&2
+      fi
     fi
     ;;
 

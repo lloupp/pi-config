@@ -75,7 +75,7 @@ test("--global preserva o layout ~/.pi/agent", () => {
   assert.ok(existsSync(join(agent, "prompts", "debug.md")));
 });
 
-test("--global remove o tema termux-neon antigo e preserva outros temas e o settings.json", () => {
+test("--global remove o tema termux-neon antigo e preserva outros temas e settings", () => {
   const home = mkdtempSync(join(tmpdir(), "pi-global-theme-"));
   const agent = join(home, ".pi", "agent");
   const themes = join(agent, "themes");
@@ -83,14 +83,26 @@ test("--global remove o tema termux-neon antigo e preserva outros temas e o sett
   writeFileSync(join(themes, "termux-neon.json"), "{}\n");
   writeFileSync(join(themes, "termux-neon.md"), "# tema\n");
   writeFileSync(join(themes, "meu-tema.json"), "{}\n");
-  const settings = '{\n  "theme": "termux-neon"\n}\n';
-  writeFileSync(join(agent, "settings.json"), settings);
+  writeFileSync(join(agent, "settings.json"), JSON.stringify({ defaultModel: "x", theme: "termux-neon", packages: ["a"] }, null, 2));
 
   runInstall(["--global", repoRoot], { home });
 
   assert.equal(existsSync(join(themes, "termux-neon.json")), false);
   assert.equal(existsSync(join(themes, "termux-neon.md")), false);
   assert.ok(existsSync(join(themes, "meu-tema.json")));
+  assert.deepEqual(JSON.parse(readFileSync(join(agent, "settings.json"), "utf8")), { defaultModel: "x", packages: ["a"] });
+  assert.equal(readdirSync(agent).some((name) => name.includes(".tmp.")), false);
+});
+
+test("--global não toca settings.json com outro tema", () => {
+  const home = mkdtempSync(join(tmpdir(), "pi-global-theme-other-"));
+  const agent = join(home, ".pi", "agent");
+  mkdirSync(agent, { recursive: true });
+  const settings = '{"theme":"light"}';
+  writeFileSync(join(agent, "settings.json"), settings);
+
+  runInstall(["--global", repoRoot], { home });
+
   assert.equal(readFileSync(join(agent, "settings.json"), "utf8"), settings);
 });
 

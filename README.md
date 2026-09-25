@@ -80,7 +80,8 @@ ferramenta tem é o que trouxe o repo até aqui.
 
 Não versionados. Provider, modelo e pacotes são escolha de cada máquina e moram no
 `~/.pi/agent/settings.json`, que o instalador **não** toca — do contrário, cada
-`/update-pi` apagaria essa escolha.
+`/update-pi` apagaria essa escolha. A única exceção é remover `"theme": "termux-neon"`,
+resto de uma versão antiga deste repo.
 
 ## Instalar
 
