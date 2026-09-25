@@ -133,6 +133,15 @@ case "$MODE" in
     mirror_dir "$SRC_DIR/prompts" "$DEST_DIR/prompts" "prompts"
     mirror_dir "$SRC_DIR/skills" "$DEST_DIR/skills" "skills"
     mirror_dir "$SRC_DIR/extensions" "$DEST_DIR/extensions" "extensions"
+
+    # Versões antigas instalavam o tema termux-neon. Remove só os arquivos dele; outros
+    # temas do usuário ficam. O settings.json não é tocado: se ainda apontar para
+    # termux-neon, o pi cai no tema dark até a chave "theme" ser removida.
+    rm -f -- "$DEST_DIR/themes/termux-neon.json" "$DEST_DIR/themes/termux-neon.md"
+    rmdir -- "$DEST_DIR/themes" 2>/dev/null || true
+    if grep -q '"theme"[[:space:]]*:[[:space:]]*"termux-neon"' "$DEST_DIR/settings.json" 2>/dev/null; then
+      echo "  ! settings.json ainda usa o tema termux-neon; remova a chave \"theme\" para voltar ao padrão." >&2
+    fi
     ;;
 
   --project|project)
