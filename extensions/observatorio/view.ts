@@ -1,3 +1,4 @@
+import { basename, dirname } from "node:path";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Observatory, starsFor, type Call, type Star } from "./model.ts";
@@ -42,13 +43,13 @@ export class ObservatoryView {
     this.stopTimer = undefined;
     if (this.paused || this.disposed) return;
     const schedule = this.options.schedule ?? ((tick: () => void) => {
-      const timer = setInterval(tick, 200);
+      const timer = setInterval(tick, 100);
       return () => clearInterval(timer);
     });
     this.stopTimer = schedule(() => {
       if (this.disposed || this.paused) return;
       this.frame++;
-      if (this.replay && this.frame % 2 === 0) {
+      if (this.replay && this.frame % 4 === 0) {
         this.cursor = Math.min(this.cursor + 1, this.replay.length);
         this.selectedKey = undefined;
         if (this.cursor === this.replay.length) {
@@ -114,7 +115,7 @@ export class ObservatoryView {
 
   render(width: number): string[] {
     const height = Math.max(1, this.options.height());
-    const w = Math.max(0, Math.min(width, 104));
+    const w = Math.max(0, width);
     const th = this.options.theme;
     if (w < 6 || height < 8) return [truncateToWidth("Observatório · Esc sai", w)];
     const inner = w - 4;
@@ -135,8 +136,9 @@ export class ObservatoryView {
     content.push(row(th.bold(styled("accent", "OBSERVATÓRIO")) + styled("muted", `  ${mode} ${badge}`)));
     content.push(row(`${stars.filter(star => star.file).length} arquivos · ${calls.length} chamadas · ` + styled(failed ? "error" : "success", `${failed} falhas`)));
 
-    // Smaller phones get a compact map; very short terminals keep the controls.
-    const mapHeight = Math.max(0, Math.min(15, height - 12));
+    // The map takes all the height left by the header and the details; very short
+    // terminals still keep the controls.
+    const mapHeight = Math.max(0, height - 14);
     if (mapHeight >= 3 && inner >= 12) {
       const grid: Cell[][] = Array.from({ length: mapHeight }, () => Array.from({ length: inner }, () => ({ char: " ", color: "dim" as Color })));
       const put = (x: number, y: number, char: string, color: Color) => {
@@ -144,50 +146,88 @@ export class ObservatoryView {
       };
       const center = { x: Math.floor(inner / 2), y: Math.floor(mapHeight / 2) };
       // Deterministic sky: resize never depends on Math.random().
+      // Each point twinkles in its own phase, derived from the same hash.
       for (let i = 0; i < Math.floor(inner * mapHeight / 26); i++) {
         const seed = hash(`sky:${i}`);
-        put(seed % inner, Math.floor(seed / inner) % mapHeight, "·", "dim");
+        const phase = (this.frame + seed % 40) % 40;
+        put(seed % inner, Math.floor(seed / inner) % mapHeight, phase < 30 ? "·" : phase < 34 ? "∙" : " ", "dim");
       }
-      const shown = stars.slice(-Math.min(32, Math.floor(inner * mapHeight / 6)));
+      // Most recently used, not most recently discovered: an old file touched now must show.
+      const shown = [...stars].sort((a, b) => a.last - b.last).slice(-Math.min(64, Math.floor(inner * mapHeight / 6)));
       if (selected && !shown.includes(selected)) shown[0] = selected;
       const occupied = new Set([`${center.x}:${center.y}`]);
       const points = new Map<string, { x: number; y: number }>();
+      const groups = new Map<string, { x: number; y: number }[]>();
       for (const star of shown) {
+        // Files of the same folder gather around one point, like a constellation; tools share another.
+        const dir = star.file ? dirname(star.label) : undefined;
+        const group = hash(dir === undefined ? "tools" : `dir:${dir}`);
         const seed = hash(star.key);
-        let x = seed % inner;
-        let y = Math.floor(seed / inner) % mapHeight;
+        let x = Math.max(0, Math.min(inner - 1, 4 + group % Math.max(1, inner - 8) + seed % 9 - 4));
+        let y = Math.max(0, Math.min(mapHeight - 1, 1 + Math.floor(group / inner) % Math.max(1, mapHeight - 2) + Math.floor(seed / 9) % 3 - 1));
         while (occupied.has(`${x}:${y}`)) {
           x = (x + 1) % inner;
           if (x === 0) y = (y + 1) % mapHeight;
         }
         occupied.add(`${x}:${y}`);
         points.set(star.key, { x, y });
+        const name = dir === undefined ? "ferramentas" : dir === "." ? "./" : `${basename(dir)}/`;
+        groups.set(name, [...groups.get(name) ?? [], { x, y }]);
       }
-      const line = (from: { x: number; y: number }, to: { x: number; y: number }, color: Color) => {
+      const line = (from: { x: number; y: number }, to: { x: number; y: number }, color: Color, path?: { x: number; y: number }[]) => {
         const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
         for (let step = 1; step < steps; step++) {
-          put(Math.round(from.x + (to.x - from.x) * step / steps), Math.round(from.y + (to.y - from.y) * step / steps), "·", color);
+          const cell = { x: Math.round(from.x + (to.x - from.x) * step / steps), y: Math.round(from.y + (to.y - from.y) * step / steps) };
+          put(cell.x, cell.y, "·", color);
+          path?.push(cell);
         }
       };
       let previous = center;
+      const trail: { x: number; y: number }[] = [];
       for (const call of calls.slice(-10)) {
         const point = points.get(`${call.file ? "file" : "tool"}:${call.target}`);
         if (point) {
-          line(previous, point, "dim");
+          line(previous, point, "dim", trail);
           previous = point;
         }
+      }
+      // A comet runs the trail of the recent calls, oldest to newest, in a loop.
+      if (trail.length) {
+        const head = this.frame % trail.length;
+        put(trail[head].x, trail[head].y, "•", "warning");
+        if (head > 0) put(trail[head - 1].x, trail[head - 1].y, "∙", "muted");
       }
       const target = selected && points.get(selected.key);
       if (target) {
         line(center, target, "accent");
-        const t = (this.frame % 12) / 12;
+        const t = (this.frame % 24) / 24;
         put(Math.round(center.x + (target.x - center.x) * t), Math.round(center.y + (target.y - center.y) * t), "•", "accent");
       }
+      // Constellation names go under (or over) their group, never over a star or another name.
+      const named = new Set<string>();
+      for (const [name, members] of groups) {
+        const text = name.slice(0, 16);
+        if ([...text].some(char => visibleWidth(char) !== 1)) continue;
+        const ys = members.map(point => point.y);
+        const y = Math.max(...ys) + 1 < mapHeight ? Math.max(...ys) + 1 : Math.min(...ys) - 1;
+        const middle = members.reduce((sum, point) => sum + point.x, 0) / members.length;
+        const x = Math.max(0, Math.min(inner - text.length, Math.round(middle - text.length / 2)));
+        const cells = [...text].map((_, i) => `${x + i}:${y}`);
+        if (y < 0 || text.length > inner || cells.some(cell => occupied.has(cell) || named.has(cell))) continue;
+        cells.forEach(cell => named.add(cell));
+        [...text].forEach((char, i) => put(x + i, y, char, "dim"));
+      }
       put(center.x, center.y, "π", "accent");
+      const last = calls.at(-1);
+      const newest = last && `${last.file ? "file" : "tool"}:${last.target}`;
+      const blink = Math.floor(this.frame / 2) % 2 === 1;
+      const pulse = Math.floor(this.frame / 4) % 2 === 1;
       for (const star of shown) {
         const point = points.get(star.key)!;
         const color: Color = star.errors ? "error" : star.running ? "warning" : star === selected ? "accent" : star.changes ? "success" : "muted";
-        put(point.x, point.y, star === selected ? "✦" : star.errors ? "!" : star.running ? (this.frame % 2 ? "*" : "+") : star.file ? "○" : "◇", color);
+        const base = star.errors ? "!" : star.running ? (blink ? "*" : "+") : star.file ? "○" : "◇";
+        const pulsing = star.key === newest && star !== selected && !star.errors && !star.running && pulse;
+        put(point.x, point.y, star === selected ? "✦" : pulsing ? "✧" : base, pulsing ? "accent" : color);
       }
       for (const cells of grid) {
         let text = "";
@@ -202,16 +242,21 @@ export class ObservatoryView {
     }
 
     if (selected) {
-      const last = selected.calls.at(-1)!;
       content.push(row(styled("accent", `✦ ${this.selection(stars) + 1}/${stars.length} `) + selected.label));
       content.push(row(selected.file
         ? `${selected.reads} leituras tentadas · ${selected.changes} alterações OK · ${selected.errors} falhas`
         : `${selected.calls.length} chamadas · ${selected.errors} falhas (argumentos ocultos)`));
-      content.push(row(`${last.tool}: ${statusText(last)} · ${last.durationMs === undefined ? "duração indisponível" : `${last.durationMs} ms`}`));
+      const recent = selected.calls.slice(-3).reverse();
+      for (let i = 0; i < 3; i++) {
+        const call = recent[i];
+        content.push(row(call ? styled(i ? "muted" : "text", `${call.tool}: ${statusText(call)} · ${call.durationMs === undefined ? "duração indisponível" : `${call.durationMs} ms`}`) : ""));
+      }
     } else {
       content.push(row(styled("accent", "O céu ainda está vazio.")));
       content.push(row("Use o pi: cada arquivo acessado vira uma estrela."));
       content.push(row("Só observação. Nenhuma ferramenta é reexecutada."));
+      content.push(row(""));
+      content.push(row(""));
     }
     const progress = this.replay ? this.cursor / Math.max(1, this.replay.length) : 1;
     const barWidth = Math.max(1, Math.min(inner - 8, 40));
