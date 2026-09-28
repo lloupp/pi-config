@@ -25,6 +25,9 @@ removido.
     dependem de JavaScript, e `browser_start`/`click`/`fill`/`close` interagem com elas
     mantendo a sessão. O `web_fetch` só lê HTML estático. Exige o binário do Lightpanda;
     no Termux, roda via `proot-distro`.
+  - [`background`](extensions/background/README.md) — comandos e subagentes em segundo
+    plano, até duas tarefas simultâneas, com resultado e cancelamento por `/jobs`.
+    Devolve o controle imediatamente; exige sessão aberta. Subagentes consomem tokens.
   - `auto-check` — verifica sintaxe após cada edição (js, py, sh, json e frontmatter de
     `SKILL.md`); o erro volta direto ao agente para corrigir. `/autocheck on|off`.
   - `update-pi` — `/update-pi` puxa este repo, reinstala e recarrega; avisa no início da
@@ -38,14 +41,13 @@ removido.
 - `tests/` — testes das extensões, runner nativo do Node.
 - `install-pi-config.sh`, `run-tests.sh`.
 
-## Plano, tarefas e subagente — sem extensão
+## Plano e delegação
 
 O pi não constrói plan mode, lista de tarefas nem subagents, e o motivo não é capricho:
 plan mode e subagent viram caixa preta, e lista de tarefas efêmera confunde o modelo mais
 do que ajuda. A objeção é a **falta de observabilidade**, não a funcionalidade.
 
-Tirada a objeção, os três continuam úteis — e cabem em duas skills, sem uma linha de
-TypeScript:
+Plano em arquivo e delegação simples continuam em duas skills:
 
 - **`plan`** — o plano é um arquivo markdown com caixas de seleção. Isso resolve o plano e
   a lista de tarefas de uma vez: um plano com `- [ ]` **é** a lista. O usuário lê com
@@ -56,7 +58,12 @@ TypeScript:
   comando e a saída inteira. É a resposta do próprio autor: spawnar por bash em vez de um
   protocolo próprio, porque assim nada acontece fora da tela.
 
-Custo: duas descrições de skill em contexto. O corpo só é lido quando a skill é usada.
+Custo das skills: duas descrições em contexto. O corpo só é lido quando a skill é usada.
+
+Para **continuar trabalhando enquanto o comando ou subagente executa**, existe agora a
+extensão `background`: ID, estado, saída limitada, cancelamento e aviso de término.
+Ela cobre essa necessidade específica; não substitui o plano em arquivo nem cria um
+orquestrador de múltiplos agentes. Veja [uso e limites](extensions/background/README.md).
 
 ## O que não está aqui, de propósito
 
@@ -87,10 +94,16 @@ resto de uma versão antiga deste repo.
 
 ```bash
 bash install-pi-config.sh              # global, em ~/.pi/agent
-bash install-pi-config.sh --project    # no projeto atual, em .pi/agent
+bash install-pi-config.sh --project    # AGENTS.md na raiz e recursos em .pi/
 ```
 
-Depois, reinicie o pi ou use `/reload`.
+O instalador espelha `extensions/`, `skills/` e `prompts/`: arquivos locais ausentes
+neste repo são removidos desses diretórios. Faça backup de personalizações antes de
+instalar. Credenciais e escolha de modelo não são distribuídas pelo repo.
+
+Depois, reinicie o pi ou use `/reload`. A extensão `background` vai junto, sem etapa extra.
+Para levar mudanças a outra máquina via Git, elas precisam estar commitadas e publicadas
+no remoto; alterar apenas a cópia local do repo não as distribui.
 
 ## Testes
 

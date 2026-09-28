@@ -21,6 +21,8 @@ test("--project instala no layout descoberto pelo Pi", () => {
 
   assert.equal(readFileSync(join(project, "AGENTS.md"), "utf8"), readFileSync(join(repoRoot, "AGENTS.md"), "utf8"));
   assert.ok(existsSync(join(project, ".pi", "extensions", "web-tools.ts")));
+  assert.equal(readFileSync(join(project, ".pi", "extensions", "background", "index.ts"), "utf8"), readFileSync(join(repoRoot, "extensions", "background", "index.ts"), "utf8"));
+  assert.ok(existsSync(join(project, ".pi", "extensions", "background", "manager.ts")));
   assert.ok(existsSync(join(project, ".pi", "skills", "verify", "SKILL.md")));
   assert.ok(existsSync(join(project, ".pi", "prompts", "debug.md")));
   assert.equal(existsSync(join(project, ".pi", "agent")), false, "recursos de projeto não pertencem a .pi/agent");
@@ -71,6 +73,8 @@ test("--global preserva o layout ~/.pi/agent", () => {
   const agent = join(home, ".pi", "agent");
   assert.ok(existsSync(join(agent, "AGENTS.md")));
   assert.ok(existsSync(join(agent, "extensions", "web-tools.ts")));
+  assert.equal(readFileSync(join(agent, "extensions", "background", "index.ts"), "utf8"), readFileSync(join(repoRoot, "extensions", "background", "index.ts"), "utf8"));
+  assert.ok(existsSync(join(agent, "extensions", "background", "manager.ts")));
   assert.ok(existsSync(join(agent, "skills", "verify", "SKILL.md")));
   assert.ok(existsSync(join(agent, "prompts", "debug.md")));
 });
