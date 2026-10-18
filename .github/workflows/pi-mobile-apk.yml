@@ -21,8 +21,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK
+      # GitHub-hosted Ubuntu already contains Android SDK tools; setup-android v3\n      # attempts to install the retired 'tools' package and now fails.\n      - name: Install Android SDK
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
         with:
