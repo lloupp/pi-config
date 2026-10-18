@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark"><link rel="manifest" href="/manifest.webmanifest"><title>Pi Mobile</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1120;--panel:#121d30;--line:#28374e;--text:#e9eef6;--muted:#94a5bb;--accent:#8ee3c8;--alert:#ffb0ab}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}button,input,textarea,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{height:100dvh;display:flex;flex-direction:column;min-height:300px}.top{padding:calc(env(safe-area-inset-top) + 14px) 16px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);background:#0e1727}.logo{height:39px;width:39px;display:grid;place-items:center;border:1px solid #446b67;background:#1c3e41;color:var(--accent);font-size:25px;font-weight:800;border-radius:12px}.heading{flex:1;min-width:0}.heading h1{font-size:18px;line-height:1.1;margin:0 0 4px}.heading .sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dot{height:8px;width:8px;background:#d8965a;border-radius:50%;display:inline-block;margin-right:5px}.dot.on{background:#71d0a2}.action{height:36px;min-width:36px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:0 9px}
+.toolbar{padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}.toolbar label{font-size:12px;color:var(--muted)}select{min-width:0;flex:1;max-width:100%;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);padding:9px;font-size:12px}.messages{flex:1;overflow-y:auto;padding:20px 14px 26px;overscroll-behavior:contain}.empty{margin:auto;text-align:center;max-width:300px;padding:10vh 0;color:var(--muted)}.empty .pi{font-size:52px;font-weight:800;color:var(--accent);line-height:1}.empty h2{color:var(--text);font-size:20px}.empty p{line-height:1.55;font-size:14px}.message{margin:0 0 15px;max-width:96%;animation:appear .16s ease}@keyframes appear{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.message.user{margin-left:auto;max-width:88%}.message .role{font-size:11px;color:var(--muted);margin-bottom:5px}.message .content{border:1px solid var(--line);padding:12px 14px;border-radius:16px;background:var(--panel);font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.message.user .content{background:#1b3b3b;border-color:#326763}.message.tool .content{font-size:12px;color:var(--muted);border-style:dashed}.message.error .content{color:var(--alert);border-color:#7e444a}.composer{background:#0e1727;border-top:1px solid var(--line);padding:10px 12px calc(env(safe-area-inset-bottom) + 10px)}.compose-row{display:flex;gap:9px;align-items:end}.compose-row textarea{flex:1;resize:none;min-height:46px;max-height:126px;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px;outline:0;font-size:14px}.send{height:46px;width:50px;border:0;border-radius:12px;background:var(--accent);color:#102d2b;font-weight:800;font-size:20px}.footer{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;margin:7px 2px 0}.linkbtn{border:0;background:none;color:var(--accent);padding:4px 6px;font-size:12px}.screen{position:fixed;inset:0;z-index:10;background:rgba(5,10,18,.8);display:grid;place-items:center;padding:18px}.sheet{max-width:430px;width:100%;background:var(--panel);border:1px solid #405169;border-radius:18px;padding:22px;box-shadow:0 20px 70px #0008}.sheet h2{margin:0 0 8px;font-size:22px}.sheet p{color:var(--muted);line-height:1.5;font-size:14px}.sheet input{width:100%;background:#0a1423;border:1px solid var(--line);border-radius:10px;color:var(--text);padding:13px;font-size:14px}.sheet .btnrow{display:flex;gap:8px;margin-top:14px}.primary{border:0;border-radius:10px;background:var(--accent);color:#102d2b;padding:12px 16px;font-weight:700;flex:1}.secondary{border:1px solid var(--line);border-radius:10px;background:#18253b;color:var(--text);padding:12px 16px}.hidden{display:none!important}.toast{position:fixed;left:12px;right:12px;bottom:90px;z-index:20;background:#26374e;border:1px solid var(--line);border-radius:12px;padding:12px 15px;color:var(--text);font-size:13px;box-shadow:0 8px 30px #0005}
+</style></head><body>
+<div id="app">
+<header class="top"><div class="logo" aria-hidden="true">π</div><div class="heading"><h1>Pi Mobile</h1><div class="sub"><span id="dot" class="dot"></span><span id="status">Verificando conexão</span></div></div><button class="action" id="new" title="Nova conversa" aria-label="Nova conversa">＋</button><button class="action" id="settings" title="Configurações" aria-label="Configurações">⚙</button></header>
+<div class="toolbar"><label for="models">Modelo</label><select id="models"><option>Conecte o Pi</option></select><button class="action" id="reload" title="Atualizar">↻</button></div>
+<main class="messages" id="messages" aria-live="polite"><div class="empty"><div class="pi">π</div><h2>Seu Pi, no celular.</h2><p>Conversas, ferramentas e extensões do repositório <strong>pi-config</strong>, em uma interface feita para Android.</p></div></main>
+<div class="composer"><div class="compose-row"><textarea id="prompt" rows="1" placeholder="Peça algo ao Pi..." aria-label="Mensagem"></textarea><button id="send" class="send" title="Enviar" aria-label="Enviar">➤</button></div><div class="footer"><span id="mode">Servidor local · Termux</span><button class="linkbtn hidden" id="stop">Parar execução</button></div></div>
+</div>
+<section class="screen hidden" id="setup"><div class="sheet"><h2>Conectar ao Pi</h2><p>Abra o Termux, execute <strong>start.sh</strong> e copie a chave exibida no terminal. A conexão acontece apenas neste celular, em <code>127.0.0.1:8765</code>.</p><input type="password" id="token" placeholder="Cole a chave de acesso" autocomplete="off" spellcheck="false" aria-label="Chave local"><div class="btnrow"><button class="secondary" id="cancel">Voltar</button><button class="primary" id="save">Conectar</button></div><p id="setupError" role="alert"></p></div></section>
+<div id="toast" class="toast hidden" role="status"></div>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id), base='http://127.0.0.1:8765';
+let token=localStorage.getItem('pi-mobile-token')||'',connected=false,busy=false,activeBubble=null,eventController=null,shouldReconnect=true;
+const el=$('messages'),model=$('models');
+function status(message,on=false){$('status').textContent=message;$('dot').classList.toggle('on',on);connected=on;}
+function toast(s){$('toast').textContent=s;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),4800);}
+function bubble(role,text,css=''){
+ const empty=el.querySelector('.empty');if(empty)empty.remove();
+ const div=document.createElement('article');div.className='message '+(css||role);
+ const title=document.createElement('div');title.className='role';title.textContent=role==='assistant'?'Pi':role==='user'?'Você':role==='tool'?'Ferramenta':'Aviso';
+ const body=document.createElement('div');body.className='content';body.textContent=text;
+ div.append(title,body);el.append(div);el.scrollTop=el.scrollHeight;return body;
+}
+function reset(){el.replaceChildren();activeBubble=null;}
+function textOf(content){if(typeof content==='string')return content;if(!Array.isArray(content))return '';return content.filter(x=>x?.type==='text').map(x=>x.text||'').join('');}
+async function api(type,args={}){
+ const res=await fetch(base+'/rpc',{method:'POST',headers:{'Authorization':'Bearer '+token,'X-Pi-Mobile':'1','Content-Type':'application/json'},body:JSON.stringify({type,...args})});
+ const result=await res.json(); if(!res.ok || result.success===false)throw Error(result.error||'Pi RPC failed');return result.data;
+}
+async function refresh(){
+ try{
+  const health=await fetch(base+'/health').then(r=>r.json());if(!health.piRunning){status('Pi não está executando');toast(health.error||'Inicie o Pi no Termux');return;}
+  const data=await api('get_state');status('Conectado ao Pi',true);busy=!!data?.isStreaming;setBusy();
+  const current=data?.model;await fillModels(current);
+  await loadHistory();
+ }catch(err){status('Sem conexão');toast(err.message);}
+}
+async function fillModels(current){
+ try{
+  const data=await api('get_available_models');const models=data?.models||[];model.replaceChildren();
+  if(!models.length){const op=document.createElement('option');op.textContent='Configure um provedor no Termux';model.append(op);return;}
+  for(const m of models){const op=document.createElement('option');op.value=JSON.stringify([m.provider,m.id]);op.textContent=`${m.provider} / ${m.name||m.id}`;model.append(op);if(current?.provider===m.provider && current?.id===m.id)op.selected=true;}
+ }catch(e){toast('Não foi possível listar modelos: '+e.message);}
+}
+async function loadHistory(){
+ const data=await api('get_messages');reset();
+ for(const m of data?.messages||[]){
+  if(m.role==='user')bubble('user',textOf(m.content));
+  else if(m.role==='assistant'){const t=textOf(m.content);if(t)bubble('assistant',t);}
+ }
+}
+function setBusy(){ $('stop').classList.toggle('hidden',!busy);$('send').disabled=!connected||busy; }
+function handleEvent(e){
+ if(e.type==='message_update' && e.assistantMessageEvent?.type==='text_delta'){
+  if(!activeBubble)activeBubble=bubble('assistant','');activeBubble.textContent+=e.assistantMessageEvent.delta||'';el.scrollTop=el.scrollHeight;
+ }else if(e.type==='message_end' && e.message?.role==='assistant'){
+  const t=textOf(e.message.content);if(t){if(!activeBubble)activeBubble=bubble('assistant',t);else activeBubble.textContent=t;} activeBubble=null;
+ }else if(e.type==='agent_start'){busy=true;setBusy();}
+ else if(e.type==='tool_execution_start'){bubble('tool',e.toolName||'Execução de ferramenta');}
+ else if(e.type==='agent_settled'){busy=false;activeBubble=null;setBusy();}
+ else if(e.type==='bridge_error'){busy=false;setBusy();status('Pi desconectado');bubble('error',e.message||'Erro de execução','error');}
+}
+async function events(){
+ if(eventController)eventController.abort();eventController=new AbortController();const controller=eventController;
+ try{
+  const response=await fetch(base+'/events',{headers:{Authorization:'Bearer '+token,'X-Pi-Mobile':'1'},signal:controller.signal});
+  if(!response.ok)throw Error('Stream HTTP '+response.status);
+  const reader=response.body.getReader(), decoder=new TextDecoder();let buf='';
+  while(true){const {done,value}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});if(buf.length>1024*1024)buf='';
+   let ix;while((ix=buf.indexOf('\n\n'))>=0){const part=buf.slice(0,ix);buf=buf.slice(ix+2);for(const line of part.split('\n')) if(line.startsWith('data: ')){try{handleEvent(JSON.parse(line.slice(6)));}catch(_){}}}
+  }
+ }catch(e){if(!controller.signal.aborted)status('Reconectando...');}
+ if(!controller.signal.aborted&&shouldReconnect){await new Promise(r=>setTimeout(r,2500));if(token)events();}
+}
+async function connect(){
+ if(!token){$('setup').classList.remove('hidden');status('Configuração necessária');return;}
+ try{const h=await fetch(base+'/health').then(r=>r.json());if(!h.piRunning)throw Error(h.error||'Abra o Termux e inicie o servidor.');
+  await api('get_state');status('Conectado ao Pi',true);$('setup').classList.add('hidden');events();await refresh();
+ }catch(e){status('Sem conexão');$('setupError').textContent=e.message;$('setup').classList.remove('hidden');}
+}
+$('settings').onclick=()=>{$('token').value=token;$('setupError').textContent='';$('setup').classList.remove('hidden');};
+$('cancel').onclick=()=>{$('setup').classList.add('hidden');};
+$('save').onclick=async()=>{const next=$('token').value.trim();if(!next){$('setupError').textContent='Informe a chave exibida no Termux.';return;}token=next;localStorage.setItem('pi-mobile-token',next);await connect();};
+$('reload').onclick=async()=>{if(!connected)await connect();else await refresh();};
+$('send').onclick=async()=>{const p=$('prompt').value.trim();if(!p||busy)return;if(!connected){toast('Conecte ao servidor primeiro.');return;}
+  $('prompt').value='';bubble('user',p);busy=true;setBusy();
+  try{await api('prompt',{message:p});}catch(e){busy=false;setBusy();bubble('error',e.message,'error');}
+};
+$('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('send').click();}};
+$('stop').onclick=async()=>{try{await api('abort');}catch(e){toast(e.message);}};
+$('new').onclick=async()=>{if(!connected)return toast('Conecte primeiro.');if(busy)return toast('Pare a execução atual primeiro.');
+ try{await api('new_session');reset();toast('Nova conversa iniciada.');}catch(e){toast(e.message);}
+};
+model.onchange=async()=>{try{const [provider,modelId]=JSON.parse(model.value);await api('set_model',{provider,modelId});toast('Modelo selecionado.');}catch(e){toast('Erro ao trocar modelo: '+e.message);}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&connected&&!busy)refresh().catch(()=>{});});
+connect();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+})();
+</script></body></html>
