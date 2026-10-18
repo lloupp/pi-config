@@ -22,6 +22,7 @@ test('Bridge exposes health, blocks unauthenticated clients and relays RPC', asy
     await new Promise(r=>setTimeout(r,80));
   }
   assert.equal(health?.piRunning,true,'server and fake Pi must start');
+  const html=await fetch(url+'/').then(r=>r.text()); assert.match(html,/Pi Mobile/);
   const denied=await fetch(url+'/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"type":"get_state"}'});assert.equal(denied.status,401);
   const token=fs.readFileSync(path.join(dir,'token'),'utf8').trim();
   const headers={Authorization:'Bearer '+token,'X-Pi-Mobile':'1','Content-Type':'application/json'};

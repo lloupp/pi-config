@@ -13,6 +13,7 @@ const PORT = Number(process.env.PI_MOBILE_PORT || 8765);
 const TOKEN_FILE = process.env.PI_MOBILE_TOKEN_FILE || path.join(os.homedir(), '.pi', 'agent', 'pi-mobile.token');
 const WORKSPACE = process.env.PI_MOBILE_WORKSPACE || path.join(os.homedir(), 'projects');
 const PI_BIN = process.env.PI_MOBILE_PI_BIN || 'pi';
+const ASSETS = path.resolve(__dirname, '../android/app/src/main/assets');
 const ALLOWED_COMMANDS = new Set(['prompt', 'abort', 'get_state', 'get_messages', 'get_available_models', 'set_model', 'new_session', 'get_commands', 'set_thinking_level']);
 
 function getToken() {
@@ -102,6 +103,17 @@ const server = http.createServer(async (req,res) => {
   res.setHeader('Access-Control-Allow-Origin', `http://${HOST}:${PORT}`);
   res.setHeader('Vary','Origin');
   if (req.method === 'OPTIONS') return json(res, 403, {error:'Cross-origin requests disabled'});
+  // UI-only files are public on the loopback socket. API actions always require a token.
+  const publicAssets = {'/':['index.html','text/html; charset=utf-8'],
+    '/manifest.webmanifest':['manifest.webmanifest','application/manifest+json'],
+    '/pi-icon-192.png':['pi-icon-192.png','image/png'],
+    '/pi-icon-512.png':['pi-icon-512.png','image/png'],
+    '/service-worker.js':['service-worker.js','text/javascript; charset=utf-8']};
+  if (req.method === 'GET' && Object.hasOwn(publicAssets, req.url)) {
+    const [filename,mime] = publicAssets[req.url];
+    res.writeHead(200, {'Content-Type':mime,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
+    return fs.createReadStream(path.join(ASSETS,filename)).pipe(res);
+  }
   if (req.method === 'GET' && req.url === '/health') return json(res, 200, {ok:true, piRunning:processAlive, error:lastError});
   if (!authorized(req)) return json(res, 401, {error:'Token inválido. Confira no Termux.'});
   if (req.headers['x-pi-mobile'] !== '1') return json(res, 403, {error:'Missing client header'});

@@ -60,3 +60,20 @@ Usa comandos RPC oficiais `prompt`, `get_state`, `get_messages`, `get_available_
 ```bash
 node --test apps/pi-mobile/tests/*.test.cjs
 ```
+
+## Usar o ZIP que veio do ChatGPT, sem esperar por GitHub
+
+1. Baixe e extraia `pi-mobile-projeto.zip` em `Download/pi-mobile` no Android.
+2. No Termux, execute `termux-setup-storage` uma vez (conceda acesso).
+3. Execute `bash ~/storage/downloads/pi-mobile/INSTALAR_NO_TERMUX.sh`.
+4. Configure seu provedor no Pi e execute `bash ~/pi-config/apps/pi-mobile/termux/start.sh`.
+5. O APK deverá ser compilado com o Android Studio ou GitHub Actions a partir do projeto incluído. O ZIP **não é** um APK instalável.
+
+
+## Rodar hoje no navegador (sem APK)
+
+Após executar `start.sh`, abra no **Chrome do mesmo celular**:
+
+`http://127.0.0.1:8765`
+
+Cole o token do Termux e use o chat. No menu do Chrome, use **Adicionar à tela inicial** ou **Instalar app** para criar um atalho com a interface de Pi Mobile. Isso não instala o APK nativo; é uma PWA acessível somente enquanto o serviço Termux estiver ativo.
